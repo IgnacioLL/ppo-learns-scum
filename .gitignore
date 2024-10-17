@@ -11,5 +11,5 @@ lab.py
 *.pth
 __pycache__/*
 *.pyc
-examples/*
+*/examples/*
 dist/*
