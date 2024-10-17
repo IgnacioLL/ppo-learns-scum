@@ -1,3 +1,8 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -8,7 +13,7 @@ from typing import List, Tuple
 from math import ceil
 import random
 import collections
-from utils import move_to_last_position, convert_to_binary_tensor
+from utils.utils import move_to_last_position, convert_to_binary_tensor
 
 class ScumEnv(gym.Env):
     def __init__(self, number_players):

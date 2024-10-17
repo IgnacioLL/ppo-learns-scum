@@ -21,7 +21,6 @@ class AgentPool:
             if load_eval:
                 agent_kwargs['path'] = f"best_models/agent_1.pt"
             
-            print("Dictionary arguments: ",agent_kwargs)
             agent = A2CAgent(number_players=self.number_of_agents, **agent_kwargs)
             agents.append(agent)
         return agents

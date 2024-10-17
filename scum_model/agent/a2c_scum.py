@@ -1,6 +1,12 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
+
 import numpy as np
 
-from agent_pool import AgentPool
+from agent.agent_pool import AgentPool
 from env.gymnasium_env import ScumEnv
 from config.constants import Constants as C
 
@@ -14,17 +20,17 @@ writer = SummaryWriter()
 class A2CScum:
     def __init__(self, number_of_agents, load_checkpoints, episodes, callback, **kwargs):
         self.env = ScumEnv(number_players=number_of_agents)
-        self.agent_pool = AgentPool(number_of_agents, load_checkpoints, kwargs=kwargs)
+        self.agent_pool = AgentPool(number_of_agents, load_checkpoints, **kwargs)
         self.total_steps = 0
-        self.ep_rewards = [[] for _ in range(args.number_of_agents)]
-        self.episodes = episodes
+        self.ep_rewards = [[] for _ in range(number_of_agents)]
+        self.total_episodes = episodes
         self.last_mean_average_reward = [-np.inf for _ in range(5)]
         self.aggregate_states_every = C.AGGREGATE_STATS_EVERY
         self.callback = callback
-        self.eval_agent_pool = AgentPool(number_of_agents, load_checkpoints=False, load_eval=True, kwargs=kwargs)
+        self.eval_agent_pool = AgentPool(number_of_agents, load_checkpoints=False, load_eval=True, **kwargs)
     
     def learn(self):
-        for episode in tqdm(range(1, self.episodes + 1), ascii=True, unit='episodes'):
+        for episode in tqdm(range(1, self.total_episodes + 1), ascii=True, unit='episodes'):
             episode_rewards = self.run_episode()
         
             for i, reward in enumerate(episode_rewards):
@@ -32,7 +38,7 @@ class A2CScum:
 
             if episode % self.aggregate_states_every == 0:
                 average_rewards = []
-                for i, average_reward in self.log_stats(self.agent_pool, self.ep_rewards, episode):
+                for i, average_reward in self.log_stats(episode):
                     average_rewards.append(average_reward)
                     self.save_models(self.agent_pool, i)
                 
@@ -98,13 +104,13 @@ class A2CScum:
         
         return episode_rewards
 
-    def log_stats(agent_pool: AgentPool, ep_rewards: list[list[int]], episode: int):
-        for i in range(agent_pool.number_of_agents):
-            recent_rewards = ep_rewards[i][-C.AGGREGATE_STATS_EVERY:]
+    def log_stats(self, episode):
+        for i in range(self.agent_pool.number_of_agents):
+            recent_rewards = self.ep_rewards[i][-C.AGGREGATE_STATS_EVERY:]
             average_reward = sum(recent_rewards) / len(recent_rewards)
             min_reward = min(recent_rewards)
             max_reward = max(recent_rewards)
-            print(f"Agent {i+1}: Avg: {average_reward:.2f}, Min: {min_reward:.2f}, Max: {max_reward:.2f} and current learning rate {agent_pool.get_agent(i).current_learning_rate:.6f}")
+            print(f"Agent {i+1}: Avg: {average_reward:.2f}, Min: {min_reward:.2f}, Max: {max_reward:.2f} and current learning rate {self.agent_pool.get_agent(i).current_learning_rate:.6f}")
             writer.add_scalar(f"Reward/Agent {i+1}/Avg Reward", average_reward, episode)
             writer.flush()
             yield i, average_reward

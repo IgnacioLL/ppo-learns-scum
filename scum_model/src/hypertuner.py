@@ -8,6 +8,11 @@ You can run this example as follows:
     $ python sb3_simple.py
 
 """
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
+
 from typing import Any
 from typing import Dict
 
@@ -20,7 +25,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 import torch
 import numpy as np
 
-from scum_agent.agent.a2c_scum import A2CScum
+from agent.a2c_scum import A2CScum
 
 from config.constants import Constants as C
 
