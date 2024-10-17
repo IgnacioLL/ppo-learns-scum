@@ -4,10 +4,11 @@ log*.txt
 lab.py
 *.lprof
 *.pkl
-models/*
-runs/*
+*/models/*
+*/runs/*
 *.pt
 *.pth
 __pycache__/*
 *.pyc
 examples/*
+dist/*
