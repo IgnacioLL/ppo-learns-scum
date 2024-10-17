@@ -10,4 +10,4 @@ runs/*
 *.pth
 __pycache__/*
 *.pyc
-*example.py
+examples/*

@@ -8,28 +8,21 @@ You can run this example as follows:
     $ python sb3_simple.py
 
 """
-
 from typing import Any
 from typing import Dict
 
 import optuna
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
-from a2c_agent import A2C_Agent
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.monitor import Monitor
-import torch
-import torch.nn as nn
 
+from stable_baselines3.common.callbacks import BaseCallback
+
+import torch
 import numpy as np
 
-from main_a2c import A2C_Scum
-import argparse
+from scum_agent.agent.a2c_scum import A2CScum
 
-from constants import Constants as C
-
-
-from env import ScumEnv
+from config.constants import Constants as C
 
 
 N_TRIALS = 100
@@ -39,9 +32,7 @@ EVAL_FREQ = C.EPISODES // 10
 N_EVAL_EPISODES = 200
 
 DEFAULT_HYPERPARAMS = {
-    "policy": "MlpPolicy",
     "number_of_agents": 5,
-    "epsilon": 0.1,
     "load_checkpoints": False,
     "episodes": C.EPISODES
 }
@@ -50,13 +41,13 @@ DEFAULT_HYPERPARAMS = {
 def sample_a2c_params(trial: optuna.Trial) -> Dict[str, Any]:
     """Sampler for A2C hyperparameters."""
     learning_rate = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
-    activation_fn = trial.suggest_categorical("activation_fn", ["tanh", "relu"])
+    # activation_fn = trial.suggest_categorical("activation_fn", ["tanh", "relu"])
 
-    activation_fn = {"tanh": nn.Tanh, "relu": nn.ReLU}[activation_fn]
+    # activation_fn = {"tanh": nn.Tanh, "relu": nn.ReLU}[activation_fn]
 
     return {
         "learning_rate": learning_rate,
-        "activation_fn": activation_fn,
+        # "activation_fn": activation_fn,
     }
 
 class TrialEvalCallback(BaseCallback):
@@ -64,31 +55,24 @@ class TrialEvalCallback(BaseCallback):
 
     def __init__(
         self,
-        eval_env: ScumEnv,
         trial: optuna.Trial,
         n_eval_episodes: int = 5,
         eval_freq: int = 10000,
-        deterministic: bool = True,
-        verbose: int = 0,
     ):
-        super().__init__(
-            eval_env=eval_env,
-            n_eval_episodes=n_eval_episodes,
-            eval_freq=eval_freq,
-            deterministic=deterministic,
-            verbose=verbose,
-        )
+        super().__init__()
+
+        self.n_eval_episodes = n_eval_episodes
+        self.eval_freq = eval_freq
         self.trial = trial
         self.eval_idx = 0
         self.is_pruned = False
         self.last_mean_reward = -np.inf
-        # TODO: Add in the environment last mean reward
 
     def _on_step(self) -> bool:
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             super()._on_step()
             self.eval_idx += 1
-            self.trial.report(self.last_mean_reward[0], self.eval_idx)
+            self.trial.report(self.last_mean_reward, self.eval_idx)
             # Prune trial if need.
             if self.trial.should_prune():
                 self.is_pruned = True
@@ -101,13 +85,11 @@ def objective(trial: optuna.Trial) -> float:
     # Sample hyperparameters.
     kwargs.update(sample_a2c_params(trial))
     # Create the callback that will periodically evaluate and report the performance.
-    eval_callback = TrialEvalCallback(
-        ScumEnv, trial, n_eval_episodes=N_EVAL_EPISODES, eval_freq=EVAL_FREQ, deterministic=True
-    )
-
+    eval_callback = TrialEvalCallback(trial, n_eval_episodes=N_EVAL_EPISODES, eval_freq=EVAL_FREQ)
     nan_encountered = False
+
     try:
-        A2C_Scum(**kwargs, callback=eval_callback)
+        A2CScum(**kwargs, callback=eval_callback).learn()
     except AssertionError as e:
         # Sometimes, random hyperparams can generate NaN.
         print(e)

@@ -1,17 +1,19 @@
-import collections
-import random
-from typing import List, Tuple
-
-import torch
-import torch.nn.functional as F
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
+
+from config.constants import Constants as C
+import torch
+from typing import List, Tuple
 from math import ceil
+import random
+import collections
+from utils import move_to_last_position, convert_to_binary_tensor
 
-from constants import Constants as C
-from utils import convert_to_binary_tensor, move_to_last_position
+class ScumEnv(gym.Env):
+    def __init__(self, number_players):
+        super(ScumEnv, self).__init__()
 
-class ScumEnv:
-    def __init__(self, number_players: int):
         self.number_players = number_players
         self.cards = self._deal_cards()
         self.player_turn = 0    
@@ -22,7 +24,7 @@ class ScumEnv:
         self.n_players_in_round = sum(self.players_in_round)
         self.player_position_ending = 0
         self.player_order = [-1] * self.number_players
-        self.previous_state = [
+        self.state = [
             torch.zeros(C.NUMBER_OF_POSSIBLE_STATES + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1, dtype=torch.float32) 
             for _ in range(self.number_players)
             ]
@@ -30,6 +32,82 @@ class ScumEnv:
         self.previous_finish = [False] * self.number_players
 
         self.cards_thrown = [0] * (C.NUMBER_OF_CARDS_PER_SUIT + 1)
+
+        
+        # Define action and observation space
+        # For example, if you have discrete actions, use spaces.Discrete
+        self.action_space = spaces.Box(low=0, high=1, shape=(C.NUMBER_OF_POSSIBLE_STATES + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1, ))  # Example: 0 or 1 actions
+        
+        # Define observation space (e.g., continuous or discrete states)
+        self.observation_space = spaces.Discrete(C.NUMBER_OF_POSSIBLE_STATES)
+        
+        # Set initial state
+        self.done = False
+
+    def reset(self) -> None:
+        self.__init__(self.number_players)
+    
+    def step(self, action: int, current_state: torch.tensor) -> Tuple[torch.tensor, int, bool, int]:
+        ## This will be the variables returned to compute the reward.
+        ## We will use the past events to be able to compute the new states.
+        agent_number = self.player_turn
+
+        previous_state = self.state[agent_number]
+        previous_reward = self.previous_reward[agent_number]
+        new_state = current_state ## this is the new state
+
+        # Update previous state to the new state
+        self.state[agent_number] = new_state
+
+        n_cards, card_number = self._decode_action(action)
+
+        if self._is_pass_action(n_cards):
+            return self._handle_pass_action(previous_state, new_state, previous_reward, False, agent_number)
+
+        skip = self._is_skip_move(card_number)
+
+        ## Delete the cards played from the player's hand also last move and last player to play.
+        self._update_game_state(card_number, n_cards)
+        
+        ## Check if the player has finished the game and compute the reward
+        finish, finishing_reward = self._check_player_finish()
+        cards_reward = self._calculate_cards_reward(n_cards, finish)
+        total_reward = cards_reward + finishing_reward
+
+        ## Update the self.previous_reward and self.previous_finish
+        self._update_previous_state(total_reward, finish)
+
+        ## This changes self.player_turn
+        self._update_player_turn(skip)
+
+        return previous_state, new_state, previous_reward, finish, agent_number
+    
+
+    def decide_move(self, state: torch.tensor, epsilon: float=1, agent: torch.nn.Module=None) -> int:
+        action_space = state[:C.NUMBER_OF_POSSIBLE_STATES]
+        if state is None:
+            state = torch.tensor([0 for _ in range((C.NUMBER_OF_POSSIBLE_STATES - 1) + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1)] + [1], dtype=torch.float32).to(C.DEVICE)
+        if random.random() < epsilon:
+            action_space_list = action_space.cpu().detach().numpy()
+            indices = [i for i, x in enumerate(action_space_list) if x == 1]
+            return random.choice(indices) + 1
+        else:
+            prediction = agent.predict(state, target=True)
+            print("Using model to decide move")
+            print("Prediction made by the model is: ", prediction[0].cpu().detach().numpy().round(2))
+            
+            # We set a large negative value to the masked predictions that are not possible
+            masked_predictions = prediction[0] * action_space
+            masked_predictions_npy  = masked_predictions.cpu().detach().numpy()
+
+            masked_predictions_npy[masked_predictions_npy == 0] = float("-inf")
+            
+            return np.argsort(masked_predictions_npy)[-1] + 1  ## esto devolvera un valor entre 1 y 57 que sera la eleccion del modelo
+    
+    
+    def render(self, mode='human'):
+        """Render the environment (optional)"""
+        print(f"Current State: {self.cards}")
 
     def _compute_cards_x_player(self, cards: List[int]) -> int:
         number_of_cards = len(cards)
@@ -74,8 +152,7 @@ class ScumEnv:
             cls._extract_higher_order(cards, 4)
         ]
 
-    def reset(self) -> None:
-        self.__init__(self.number_players)
+
 
     def _next_turn(self) -> int:
         next_player = (self.player_turn + 1) % self.number_players
@@ -180,70 +257,17 @@ class ScumEnv:
         
         return state
 
-    def decide_move(self, state: torch.tensor, epsilon: float=1, agent: torch.nn.Module=None) -> int:
-        action_space = state[:C.NUMBER_OF_POSSIBLE_STATES]
-        if state is None:
-            state = torch.tensor([0 for _ in range((C.NUMBER_OF_POSSIBLE_STATES - 1) + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1)] + [1], dtype=torch.float32).to(C.DEVICE)
-        if random.random() < epsilon:
-            action_space_list = action_space.cpu().detach().numpy()
-            indices = [i for i, x in enumerate(action_space_list) if x == 1]
-            return random.choice(indices) + 1
-        else:
-            prediction = agent.predict(state, target=True)
-            print("Using model to decide move")
-            print("Prediction made by the model is: ", prediction[0].cpu().detach().numpy().round(2))
-            
-            # We set a large negative value to the masked predictions that are not possible
-            masked_predictions = prediction[0] * action_space
-            masked_predictions_npy  = masked_predictions.cpu().detach().numpy()
 
-            masked_predictions_npy[masked_predictions_npy == 0] = float("-inf")
-            
-            return np.argsort(masked_predictions_npy)[-1] + 1  ## esto devolvera un valor entre 1 y 57 que sera la eleccion del modelo
-    
     def _handle_unable_to_play(self) -> None:
         self.players_in_round[self.player_turn] = False
         self.n_players_in_round -= 1
         self._update_player_turn()
         self._check_players_playing()
 
-    def step(self, action: int, current_state: torch.tensor) -> Tuple[torch.tensor, int, bool, int]:
-        ## This will be the variables returned to compute the reward.
-        ## We will use the past events to be able to compute the new states.
-        agent_number = self.player_turn
 
-        previous_state = self.previous_state[agent_number]
-        previous_reward = self.previous_reward[agent_number]
-        new_state = current_state ## this is the new state
-
-        # Update previous state to the new state
-        self.previous_state[agent_number] = new_state
-
-        n_cards, card_number = self._decode_action(action)
-
-        if self._is_pass_action(n_cards):
-            return self._handle_pass_action(previous_state, new_state, previous_reward, False, agent_number)
-
-        skip = self._is_skip_move(card_number)
-
-        ## Delete the cards played from the player's hand also last move and last player to play.
-        self._update_game_state(card_number, n_cards)
-        
-        ## Check if the player has finished the game and compute the reward
-        finish, finishing_reward = self._check_player_finish()
-        cards_reward = self._calculate_cards_reward(n_cards, finish)
-        total_reward = cards_reward + finishing_reward
-
-        ## Update the self.previous_reward and self.previous_finish
-        self._update_previous_state(total_reward, finish)
-
-        ## This changes self.player_turn
-        self._update_player_turn(skip)
-
-        return previous_state, new_state, previous_reward, finish, agent_number
     
     def get_stats_after_finish(self, agent_number: int) -> Tuple[int, int, int]:
-        current_state = self.previous_state[agent_number]
+        current_state = self.state[agent_number]
         new_state = torch.zeros((C.NUMBER_OF_POSSIBLE_STATES) + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1)
         reward = self.previous_reward[agent_number]
         return current_state, new_state, reward

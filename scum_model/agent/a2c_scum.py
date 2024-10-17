@@ -1,40 +1,36 @@
-import torch
 import numpy as np
 
-from a2c_agent import A2C_Agent, Pool_A2C_Agents
-from env import ScumEnv
-from constants import Constants as C
+from agent_pool import AgentPool
+from env.gymnasium_env import ScumEnv
+from config.constants import Constants as C
 
 from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 import argparse
 
-import optuna
-
-
 writer = SummaryWriter()
 
-
-
-class A2C_Scum:
-    def __init__(self, number_of_agents, load_checkpoints, episodes):
+class A2CScum:
+    def __init__(self, number_of_agents, load_checkpoints, episodes, callback, **kwargs):
         self.env = ScumEnv(number_players=number_of_agents)
-        self.agent_pool = Pool_A2C_Agents(number_of_agents, load_checkpoints)
+        self.agent_pool = AgentPool(number_of_agents, load_checkpoints, kwargs=kwargs)
         self.total_steps = 0
         self.ep_rewards = [[] for _ in range(args.number_of_agents)]
         self.episodes = episodes
         self.last_mean_average_reward = [-np.inf for _ in range(5)]
         self.aggregate_states_every = C.AGGREGATE_STATS_EVERY
+        self.callback = callback
+        self.eval_agent_pool = AgentPool(number_of_agents, load_checkpoints=False, load_eval=True, kwargs=kwargs)
     
     def learn(self):
         for episode in tqdm(range(1, self.episodes + 1), ascii=True, unit='episodes'):
-            episode_rewards = self.step(self.env, self.agent_pool, self.total_steps)
+            episode_rewards = self.run_episode()
         
             for i, reward in enumerate(episode_rewards):
                 self.ep_rewards[i].append(reward)
 
-            if episode % self.aggregate_stats_every == 0:
+            if episode % self.aggregate_states_every == 0:
                 average_rewards = []
                 for i, average_reward in self.log_stats(self.agent_pool, self.ep_rewards, episode):
                     average_rewards.append(average_reward)
@@ -46,15 +42,34 @@ class A2C_Scum:
                 self.agent_pool.refresh_agents()
                 self.agent_pool.save_agents()
 
-    def step(self):
+                self.eval_agent_pool.set_agent(self.get_better_model())
+                self.callback.last_mean_reward = np.array(self.eval(self.callback.n_eval_episodes)).mean()
+            
+            # Call the callback after each episode
+            if self.callback is not None:
+                if not self.callback._on_step():
+                    break  # Stop training if the callback returns False
+
+    def eval(self, episodes):
+        ep_rewards = []
+        for _ in range(episodes):
+            ep_rewards.append(self.run_episode(eval=True))
+        
+        return ep_rewards
+
+
+
+    def run_episode(self, eval: bool=False):
         finish_agents = [False] * 5
         episode_rewards = [0] * 5
         self.env.reset()
         print("Starting episode")
         print("_" * 100)
 
-        while np.array(finish_agents).sum() != self.agent_pool.number_of_agents:
-            agent = self.agent_pool.get_agent(self.env.player_turn)
+        agent_pool = self.agent_pool if eval else self.eval_agent_pool
+
+        while np.array(finish_agents).sum() != agent_pool.number_of_agents:
+            agent = agent_pool.get_agent(self.env.player_turn)
 
             state = self.env.get_cards_to_play()
             action, rw_decision = agent.decide_move(state)
@@ -74,11 +89,16 @@ class A2C_Scum:
 
             self.total_steps += 1
         
-        agent.train(self.total_steps)
-
+        if eval == False:           
+            agent.train(self.total_steps)
+        
+        ## Only interested in the first agent
+        if eval:
+            return episode_rewards[0]
+        
         return episode_rewards
 
-    def log_stats(agent_pool: Pool_A2C_Agents, ep_rewards: list[list[int]], episode: int):
+    def log_stats(agent_pool: AgentPool, ep_rewards: list[list[int]], episode: int):
         for i in range(agent_pool.number_of_agents):
             recent_rewards = ep_rewards[i][-C.AGGREGATE_STATS_EVERY:]
             average_reward = sum(recent_rewards) / len(recent_rewards)
@@ -89,7 +109,7 @@ class A2C_Scum:
             writer.flush()
             yield i, average_reward
 
-    def save_models(agent_pool: Pool_A2C_Agents, i: int) -> None:
+    def save_models(agent_pool: AgentPool, i: int) -> None:
         agent_pool.get_agent(i).save_model(path=f"models/checkpoints/agent_{i+1}.pt")
 
 if __name__ == "__main__":
@@ -102,5 +122,8 @@ if __name__ == "__main__":
     parser.add_argument("-as", "--aggregate_stats_every", type=int, default=C.AGGREGATE_STATS_EVERY, help="Aggregate stats every N episodes")
 
     args = parser.parse_args()
+
+    model = A2CScum(number_of_agents=5, load_checkpoints=False, episodes=C.EPISODES)
+    model.learn()
 
     

@@ -4,69 +4,27 @@ from torch.distributions import Categorical
 from torch.nn import functional as F
 from torch.optim import Adam
 
-from constants import Constants as C
-from collections import deque
+from config.constants import Constants as C
 
 import numpy as np
-import pandas as pd
-from typing import List
 
 import torch.nn as nn
 import random
 
-class A2C_model(nn.Module):
-    def __init__(self, number_of_players):
-        super().__init__()
+from agent.a2c_model import A2CModel
 
-        self.chore_part = nn.Sequential(
-            nn.Linear(C.NUMBER_OF_POSSIBLE_STATES + C.NUMBER_OF_CARDS_PER_SUIT + 1 + number_of_players, 256),
-            nn.LayerNorm(256),  # Use LayerNorm instead of BatchNorm1d
-            nn.ReLU(),
-            nn.Linear(256, 512),
-            nn.LayerNorm(512),  # Use LayerNorm instead of BatchNorm1d
-            nn.ReLU()
-        )
-
-        self.value_estimate = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.LayerNorm(256),  # Use LayerNorm instead of BatchNorm1d
-            nn.ReLU(), 
-            nn.Linear(256, 1)
-        )
-        
-        self.action_probability = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.LayerNorm(256),  # Use LayerNorm instead of BatchNorm1d
-            nn.ReLU(), 
-            nn.Linear(256, C.NUMBER_OF_POSSIBLE_STATES)
-        )
-
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        if x.dim() == 1:  # If input is 1D, reshape to 2D by adding batch dimension
-            x = x.unsqueeze(0)
-    
-        x = self.chore_part(x)
-        value = self.value_estimate(x)
-        action_probs = self.softmax(self.action_probability(x))
-        return value, action_probs
-
-        
-class A2C_Agent:
-    def __init__(self, learning_rate: float=1e-4, discount: float=None, number_players=C.NUMBER_OF_AGENTS, path=None):
-        
-        if path is None:
-            self.model = A2C_model(number_players).to(C.DEVICE)
-        else:
-            self.model = A2C_model(number_players).to(C.DEVICE)
+class A2CAgent:
+    def __init__(self, learning_rate: float = 1e-4, discount: float = None, number_players: int = C.NUMBER_OF_AGENTS, path: str = None):
+        self.model = A2CModel(number_players).to(C.DEVICE)
+        if path:
             self.model.load_state_dict(torch.load(path))
+
         self.learning_rate = learning_rate
         self.initial_learning_rate = self.learning_rate * C.INITIAL_LR_FACTOR
         self.current_learning_rate = self.initial_learning_rate
-        self.discount = discount if discount is not None else C.DISCOUNT
+        self.discount = discount if discount else C.DISCOUNT
 
-        self.optimizer = Adam(params=self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
         self.memory = []
         self.eps = np.finfo(np.float32).eps.item()
 
@@ -153,52 +111,3 @@ class A2C_Agent:
             self.current_learning_rate = self.learning_rate
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.current_learning_rate
-
-    
-
-class Pool_A2C_Agents:
-    def __init__(self, num_agents: int, load_checkpoints: bool = False, **kwargs):
-        self.number_of_agents = num_agents
-        self.agents = self._create_agents(load_checkpoints, **kwargs)
-        self.order = list(range(self.number_of_agents))
-        self.previous_order = self.order.copy()
-        self.previous_agents = self.agents.copy()
-
-    def _create_agents(self, load_checkpoints: bool, **kwargs):
-        agents = []
-        for i in range(self.number_of_agents):
-            agent_kwargs = kwargs.copy()
-            if load_checkpoints:
-                agent_kwargs['path'] = f"{C.CHECKPOINTS_PATH}/agent_{i+1}.pt"
-            agent = A2C_Agent(n=self.number_of_agents, **agent_kwargs)
-            agents.append(agent)
-        return agents
-
-    def get_agent(self, agent_number):
-        return self.agents[agent_number]
-
-    
-    def update_order(self, average_rewards: List[float]) -> None:
-        self.previous_order = self.order.copy()
-        order = np.argsort(average_rewards).tolist()
-        order.reverse()
-        self.order = order.copy()
-        
-    def save_agents(self) -> None:
-        self.previous_agents = self.agents.copy()
-
-    def refresh_agents(self) -> None:
-        # Load the weights of the best performing agents into the worst performing ones
-        worst_agent, second_worst_agent = self.order[-1], self.order[-2]
-        best_agent, second_best_agent = self.previous_order[0], self.previous_order[1]
-
-        print(f"Refreshing agents {worst_agent} and {second_worst_agent} with {best_agent} and {second_best_agent}")
-
-        self.agents[worst_agent].model.load_state_dict(self.previous_agents[best_agent].model.state_dict())
-        self.agents[second_worst_agent].model.load_state_dict(self.previous_agents[second_best_agent].model.state_dict())
-
-
-
-
-        
-
