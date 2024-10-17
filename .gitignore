@@ -6,6 +6,7 @@ lab.py
 *.pkl
 */models/*
 */runs/*
+*/logs/*
 *.pt
 *.pth
 __pycache__/*
