@@ -39,20 +39,21 @@ N_EVAL_EPISODES = 200
 DEFAULT_HYPERPARAMS = {
     "number_of_agents": 5,
     "load_checkpoints": False,
-    "episodes": C.EPISODES
 }
 
 
 def sample_a2c_params(trial: optuna.Trial) -> Dict[str, Any]:
     """Sampler for A2C hyperparameters."""
     learning_rate = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
-    # activation_fn = trial.suggest_categorical("activation_fn", ["tanh", "relu"])
-
-    # activation_fn = {"tanh": nn.Tanh, "relu": nn.ReLU}[activation_fn]
+    policy_error_coef = trial.suggest_float("policy_error_coef", 0, 0.5, log=False)
+    entropy_coef = trial.suggest_float("entropy_coef", 1e-2, 100, log=True)
+    model = trial.suggest_categorical("model", ["small", "medium", "big"])
 
     return {
         "learning_rate": learning_rate,
-        # "activation_fn": activation_fn,
+        "model": model,
+        "policy_error_coef": policy_error_coef,
+        "entropy_coef": entropy_coef
     }
 
 class TrialEvalCallback(BaseCallback):
@@ -85,7 +86,7 @@ class TrialEvalCallback(BaseCallback):
         return True
 
 
-def objective(trial: optuna.Trial) -> float:
+def objective(trial: optuna.Trial, episodes=C.EPISODES) -> float:
     kwargs = DEFAULT_HYPERPARAMS.copy()
     # Sample hyperparameters.
     kwargs.update(sample_a2c_params(trial))
@@ -93,8 +94,14 @@ def objective(trial: optuna.Trial) -> float:
     eval_callback = TrialEvalCallback(trial, n_eval_episodes=N_EVAL_EPISODES, eval_freq=EVAL_FREQ)
     nan_encountered = False
 
+    print("Learning rate is: ", kwargs['learning_rate'])
+    print("Model is: ", kwargs['model'])
+    print("Policy error coefficient is: ", kwargs['policy_error_coef'])
+    print("Entropy coefficient is: ", kwargs['entropy_coef'])
+    
+
     try:
-        A2CScum(**kwargs, callback=eval_callback).learn()
+        A2CScum(**kwargs, callback=eval_callback).learn(total_episodes=episodes)
     except AssertionError as e:
         # Sometimes, random hyperparams can generate NaN.
         print(e)
@@ -120,7 +127,7 @@ if __name__ == "__main__":
 
     study = optuna.create_study(sampler=sampler, pruner=pruner, direction="maximize")
     try:
-        study.optimize(objective, n_trials=N_TRIALS, timeout=600)
+        study.optimize(objective, n_trials=N_TRIALS)
     except KeyboardInterrupt:
         pass
 
