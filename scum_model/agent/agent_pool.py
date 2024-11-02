@@ -15,8 +15,6 @@ class AgentPool:
         self.previous_order = self.order.copy()
         self.previous_agents = self.agents.copy()
 
-
-
     def _create_agents(self, load_checkpoints: bool, load_eval: bool, **kwargs):
         agents = []
         for i in range(self.number_of_agents):
@@ -27,6 +25,7 @@ class AgentPool:
                 agent_kwargs['path'] = f"best_models/agent_1.pt"
             agent = A2CAgent(number_players=self.number_of_agents, **agent_kwargs)
             agents.append(agent)
+
         return agents
 
     def get_agent(self, agent_number):
