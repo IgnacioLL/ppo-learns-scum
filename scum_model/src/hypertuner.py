@@ -131,7 +131,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
 
-    print("Number of finished trials: ", len(study.trials))
+    print("Number of done trials: ", len(study.trials))
 
     print("Best trial:")
     trial = study.best_trial
