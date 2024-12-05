@@ -227,7 +227,7 @@ class DynamicEloSystem:
             
         return pd.concat(results, ignore_index=True)
     
-    def compare_performance(self, agent1_id: str, agent2_id: str, total_num_episodes: int = 10) -> float:
+    def compare_performance(self, agent1_id: str, agent2_id: str, total_num_episodes: int = 200) -> float:
         """Compare models"""
         path_agent1 = self.model_info[agent1_id]['path']
         path_agent2 = self.model_info[agent2_id]['path']
@@ -298,29 +298,11 @@ class DynamicEloSystem:
     
     def get_model_summary(self, model_id: str) -> Dict:
         """Get summary statistics for a model"""
-        model_matches = [m for m in self.match_history if m['test_model'] == model_id or m['opponent'] == model_id]
-        
-        if not model_matches:
-            return {
-                'model_id': model_id,
-                'rating': self.ratings[model_id]['rating'],
-                'matches_played': 0,
-                'average_score': None,
-                'uncertainty': self.ratings[model_id]['uncertainty']
-            }
-            
-        scores = []
-        for match in model_matches:
-            if match['test_model'] == model_id:
-                scores.append(match['score'])
-            else:
-                scores.append(1 - match['score'])
-                
+
         return {
             'model_id': model_id,
             'rating': self.ratings[model_id]['rating'],
-            'matches_played': len(model_matches),
-            'average_score': np.mean(scores),
+            'matches_played':  self.ratings[model_id]['matches'],
             'uncertainty': self.ratings[model_id]['uncertainty']
         }
     
