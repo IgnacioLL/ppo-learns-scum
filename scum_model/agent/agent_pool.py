@@ -37,6 +37,13 @@ class AgentPool:
     def get_better_model(self):
         return self.get_agent(self.order[0])
 
+
+    def swap_worst_models_for_best_ones(self, average_rewards: List[float]) -> None:
+        self.update_order(average_rewards)
+        self.save_agents()
+        self.refresh_agents()
+
+
     def update_order(self, average_rewards: List[float]) -> None:
         self.previous_order = self.order.copy()
         order = np.argsort(average_rewards).tolist()
@@ -49,6 +56,6 @@ class AgentPool:
     def refresh_agents(self) -> None:
         worst_agent, second_worst_agent = self.order[-1], self.order[-2]
         best_agent, second_best_agent = self.previous_order[0], self.previous_order[1]
-        print(f"Refreshing agents {worst_agent} and {second_worst_agent} with {best_agent} and {second_best_agent}")
+        
         self.agents[worst_agent].model.load_state_dict(self.previous_agents[best_agent].model.state_dict())
         self.agents[second_worst_agent].model.load_state_dict(self.previous_agents[second_best_agent].model.state_dict())
