@@ -90,20 +90,17 @@ class A2CModel(nn.Module):
     def create_small_model(self):
         self.chore_part = nn.Sequential(
             nn.Linear(C.NUMBER_OF_POSSIBLE_STATES + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 64),
-            nn.LayerNorm(64),
             nn.ReLU()
         )
 
         self.value_estimate = nn.Sequential(
             nn.Linear(64, 64),
-            nn.LayerNorm(64),
             nn.ReLU(), 
             nn.Linear(64, 1)
         )
         
         self.policy_probability = nn.Sequential(
             nn.Linear(64, 128),
-            nn.LayerNorm(128),
             nn.ReLU(), 
             nn.Linear(128, C.NUMBER_OF_POSSIBLE_STATES)
         )
