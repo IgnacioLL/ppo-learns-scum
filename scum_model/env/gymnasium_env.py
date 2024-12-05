@@ -34,7 +34,7 @@ class ScumEnv(gym.Env):
             for _ in range(self.number_players)
             ]
         self.previous_reward = [0] * self.number_players
-        self.previous_finish = [False] * self.number_players
+        self.previous_done = [False] * self.number_players
 
         self.cards_thrown = [0] * (C.NUMBER_OF_CARDS_PER_SUIT + 1)
 
@@ -74,18 +74,18 @@ class ScumEnv(gym.Env):
         ## Delete the cards played from the player's hand also last move and last player to play.
         self._update_game_state(card_number, n_cards)
         
-        ## Check if the player has finished the game and compute the reward
-        finish, finishing_reward = self._check_player_finish()
-        cards_reward = self._calculate_cards_reward(n_cards, finish)
-        total_reward = cards_reward + finishing_reward
+        ## Check if the player has done the game and compute the reward
+        done, done_reward = self._check_player_done()
+        cards_reward = self._calculate_cards_reward(n_cards, done)
+        total_reward = cards_reward + done_reward
 
-        ## Update the self.previous_reward and self.previous_finish
-        self._update_previous_state(total_reward, finish)
+        ## Update the self.previous_reward and self.previous_done
+        self._update_previous_state(total_reward, done)
 
         ## This changes self.player_turn
         self._update_player_turn(skip)
 
-        return previous_state, new_state, previous_reward, finish, agent_number
+        return previous_state, new_state, previous_reward, done, agent_number
     
 
     def decide_move(self, state: torch.tensor, epsilon: float=1, agent: torch.nn.Module=None) -> int:
@@ -193,25 +193,25 @@ class ScumEnv(gym.Env):
                 self.player_turn = self.last_player
             self._reinitialize_round()
 
-    def _check_player_finish(self) -> Tuple[bool, int]:
+    def _check_player_done(self) -> Tuple[bool, int]:
         if not self.cards[self.player_turn][0]:
             self.players_in_game[self.player_turn] = False
             self.player_order[self.player_position_ending] = self.player_turn
             if self.player_position_ending == 0:
-                finishing_reward = C.REWARD_WIN
+                done_reward = C.REWARD_WIN
             elif self.player_position_ending == 1:
-                finishing_reward = C.REWARD_SECOND
+                done_reward = C.REWARD_SECOND
             elif self.player_position_ending == self.number_players - 2:
-                finishing_reward = C.REWARD_FOURTH
+                done_reward = C.REWARD_FOURTH
             elif self.player_position_ending == self.number_players - 1:
-                finishing_reward = C.REWARD_LOSE
+                done_reward = C.REWARD_LOSE
             else:
-                finishing_reward = C.REWARD_THIRD
+                done_reward = C.REWARD_THIRD
             
             self.player_position_ending += 1
             self.last_move = None
             self._reinitialize_round()
-            return True, finishing_reward
+            return True, done_reward
         return False, 0
 
     def convert_to_binary_player_turn_cards(self) -> torch.tensor:
@@ -271,7 +271,7 @@ class ScumEnv(gym.Env):
 
 
     
-    def get_stats_after_finish(self, agent_number: int) -> Tuple[int, int, int]:
+    def get_stats_after_done(self, agent_number: int) -> Tuple[int, int, int]:
         current_state = self.state[agent_number]
         new_state = torch.zeros((C.NUMBER_OF_POSSIBLE_STATES) + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1)
         reward = self.previous_reward[agent_number]
@@ -287,10 +287,10 @@ class ScumEnv(gym.Env):
     def _is_pass_action(self, n_cards: int) -> bool:
         return n_cards == 4
 
-    def _handle_pass_action(self, previous_state, new_state, previous_reward, previous_finish, agent_number):
+    def _handle_pass_action(self, previous_state, new_state, previous_reward, previous_done, agent_number):
         self.previous_reward[agent_number] = C.REWARD_PASS
         self._handle_unable_to_play()
-        return previous_state, new_state, previous_reward, previous_finish, agent_number
+        return previous_state, new_state, previous_reward, previous_done, agent_number
 
     def _is_skip_move(self, card_number: int) -> bool:
         return self.last_move is not None and self.last_move[0] == card_number
@@ -300,15 +300,15 @@ class ScumEnv(gym.Env):
         self.last_move = [card_number, n_cards]
         self.last_player = self.player_turn
 
-    def _calculate_cards_reward(self, n_cards: int, finish: bool) -> int:
+    def _calculate_cards_reward(self, n_cards: int, done: bool) -> int:
         cards_reward = C.REWARD_CARD * (n_cards + 1)
-        if finish:
+        if done:
             cards_reward += C.REWARD_EMPTY_HAND
         return cards_reward
 
-    def _update_previous_state(self, total_reward: int, finish: bool):
+    def _update_previous_state(self, total_reward: int, done: bool):
         self.previous_reward[self.player_turn] = total_reward
-        self.previous_finish[self.player_turn] = finish
+        self.previous_done[self.player_turn] = done
 
     def _print_game_state(self) -> None:
         if self.last_move is not None:
