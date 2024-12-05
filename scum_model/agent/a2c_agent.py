@@ -19,11 +19,12 @@ import random
 
 from agent.a2c_model import A2CModel
 
+from utils.ml_utils import compute_grad_stats
+
 class A2CAgent:
     def __init__(self, learning_rate: float = 1e-4, discount: float = None, number_players: int = C.NUMBER_OF_AGENTS, path: str = None, model="small", model_id=None, entropy_coef=0, policy_error_coef=.1):
         self.model = A2CModel(number_of_players=number_players, model=model, id=model_id).to(C.DEVICE)
         if path:
-            print(f"Loading model from {path}")
             self.model.load_state_dict(torch.load(path))
 
         self.learning_rate = learning_rate
@@ -32,96 +33,60 @@ class A2CAgent:
         self.discount = discount if discount else C.DISCOUNT
 
         self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
-        self.memory = []
+        self.buffer = []
         self.eps = np.finfo(np.float32).eps.item()
 
         self.policy_error_coef = policy_error_coef
         self.entropy_coef = entropy_coef
 
+    def save_in_buffer(self, current_state, reward, new_state):
+        self.buffer.append((current_state, reward, new_state))
+
+    def clear_buffer(self):
+        self.buffer = []
+
+
     @torch.no_grad()
     def predict(self, state):
         _, probs = self.model(state)
         return probs
-
+    
     def train(self, step):
-        # Stack states and prepare data as before
-        states = torch.stack([transition[0].to(C.DEVICE) for transition in self.memory])
-        rewards = torch.tensor([transition[1] for transition in self.memory], device=C.DEVICE)
-        new_states = torch.stack([transition[2].to(C.DEVICE) for transition in self.memory])
-        # Get action masks if they're part of your transitions
-        action_masks = torch.stack([transition[0][:C.NUMBER_OF_POSSIBLE_STATES].to(C.DEVICE) for transition in self.memory])  # Assuming masks are stored
-        
-        filter_avoid_impossible_state = ~torch.all(states == 0, dim=1)
-        states = states[filter_avoid_impossible_state]
-        rewards = rewards[filter_avoid_impossible_state].cpu().tolist()
-        new_states = new_states[filter_avoid_impossible_state]
-        action_masks = action_masks[filter_avoid_impossible_state]
 
-        self.memory = []
+        data = self.load_data_from_buffer()
+        states, rewards, _, action_masks = self.remove_impossible_states(data)
+
+        self.clear_buffer()
+        returns = self.compute_discounted_returns(rewards)
         
-        # Calculate returns as before
-        returns = []
-        G = 0
-        for reward in rewards[::-1]:
-            G = reward + self.discount * G
-            returns.insert(0, G)
-        returns = torch.tensor(returns, device=C.DEVICE)
-        
-        # Get model predictions
         value_preds, policy_logits = self.model(states)
+
+        masked_policy_logits = self.mask_impossible_actions(policy_logits, action_masks)
         
-        # Apply temperature scaling to logits (optional, can help with stability)
-        temperature = 1.0
-        policy_logits = policy_logits / temperature
-        
-        # Apply mask by setting logits of invalid actions to large negative values
-        masked_policy_logits = policy_logits.clone()
-        masked_policy_logits[(action_masks==0)] = float('-inf')
-        
-        # Get probabilities using softmax only on valid actions
-        policy_probs = F.softmax(masked_policy_logits, dim=-1)
-        
-        # Calculate policy log probabilities, avoiding log(0)
-        # Add small epsilon to prevent taking log of zero
+        masked_policy_probs = F.softmax(masked_policy_logits, dim=-1)
+
         eps = 1e-10
-        policy_log_probs = torch.log(policy_probs + eps)
-        
-        # Value loss
-        print("Value prediction average: ", value_preds.squeeze().mean())
-        print("Returns prediction average: ", returns.mean())
+        masked_policy_log_probs = torch.log(masked_policy_probs + eps)
 
+        advantadge = self.compute_advantadge(returns, value_preds)
+        policy_loss = self.compute_policy_error_with_masked_actions(masked_policy_log_probs,
+                                                                          advantadge, action_masks)
         value_errors = F.smooth_l1_loss(value_preds.squeeze(), returns)
-        
-        # Calculate advantages
-        advantages = returns - value_preds.squeeze()
-        
-        # Policy loss - only consider valid actions
-        # Multiply by mask to zero out invalid actions
 
-        policy_error = (policy_log_probs * action_masks) * advantages.unsqueeze(1)
-        
-        # Calculate mean policy error only over valid actions
-        valid_actions_count = action_masks.sum(dim=1, keepdim=True)
-        policy_error = policy_error.sum(dim=1) / valid_actions_count.squeeze()
-        
-        # Optimize
         self.optimizer.zero_grad()
         
         # Scale losses appropriately
         value_loss = value_errors.mean()
-        policy_loss = -policy_error.mean()  # Negative because we want to maximize
         
-        # Add entropy bonus to encourage exploration (optional)
-        entropy = -(policy_probs * policy_log_probs).sum(dim=1).mean()
-        entropy_coef = 0  # Adjust this coefficient as needed
+        # Add entropy bonus to encourage exploration
+        entropy = self.compute_entropy(masked_policy_probs, masked_policy_log_probs)
         
-        # Combine losses with appropriate scaling
-        value_coef = 1  # Adjust this coefficient as needed
-        policy_coef = 0.1  # Adjust this coefficient as needed
-        total_loss = self.policy_error_coef * policy_loss + value_coef * value_loss - self.entropy_coef * entropy
+        # Combine losses with appropriate scaling for dealing with inestability in training
+        total_loss = self.policy_error_coef * policy_loss +  value_loss - self.entropy_coef * entropy
         
         # Gradient clipping
         total_loss.backward()
+        median_grad, mean_grad, max_grad, min_grad, p99_grad, p01_grad = compute_grad_stats(self.model)
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         
         # Optimizer step
@@ -129,11 +94,63 @@ class A2CAgent:
 
         return {
             'value_loss': value_loss.item(),
-            'policy_loss': policy_loss.item(),
-            'entropy': entropy.item(),
-            'total_loss': total_loss.item()
+            'policy_loss': policy_loss.item() * self.policy_error_coef,
+            'entropy': entropy.item() * self.entropy_coef,
+            'total_loss': total_loss.item(), 
+            'value_prediction_avg': value_preds.squeeze().mean().item(),
+            'returns': returns.mean().item(),
+            'mean_gradient': mean_grad.item(),
+            'median_gradient': median_grad.item(),
+            'max_gradient': max_grad.item(),
+            'min_gradient': min_grad.item(),
+            'p99_gradient': p99_grad.item(),
+            'p01_gradient': p01_grad.item(),
+            'advantadge': advantadge.mean().item()
         }
     
+    def load_data_from_buffer(self):
+        states = torch.stack([transition[0].to(C.DEVICE) for transition in self.buffer])
+        rewards = torch.tensor([transition[1] for transition in self.buffer], device=C.DEVICE)
+        new_states = torch.stack([transition[2].to(C.DEVICE) for transition in self.buffer])
+        action_masks = torch.stack([transition[0][:C.NUMBER_OF_POSSIBLE_STATES].to(C.DEVICE) for transition in self.buffer])  # Assuming masks are stored
+        
+        return states, rewards, new_states, action_masks
+    
+    def remove_impossible_states(self, data):
+        states, rewards, new_states, action_masks = data
+        impossible_states = ~torch.all(states == 0, dim=1)
+        states = states[impossible_states]
+        rewards = rewards[impossible_states].cpu().tolist()
+        new_states = new_states[impossible_states]
+        action_masks = action_masks[impossible_states]
+
+        return states, rewards, new_states, action_masks
+    
+    def compute_discounted_returns(self, rewards: list) -> torch.tensor:
+        G = 0
+        returns = []
+        for reward in rewards[::-1]:
+            G = reward + self.discount * G
+            returns.insert(0, G)
+        return torch.tensor(returns, device=C.DEVICE)
+        
+    def mask_impossible_actions(self, action_masks, policy_logits):
+        masked_policy_logits = policy_logits.clone()
+        masked_policy_logits[(action_masks==0)] = float('-inf')
+
+        return masked_policy_logits
+    
+    def compute_advantadge(self, returns, value_preds):
+        return returns - value_preds.squeeze()
+    
+    def compute_policy_error_with_masked_actions(self, policy_log_probs, advantages, action_masks):
+        policy_loss = (-policy_log_probs * action_masks) * advantages.unsqueeze(1)
+
+        return policy_loss.mean()
+    
+    def compute_entropy(self, policy_probs, policy_log_probs):
+        return -(policy_probs * policy_log_probs).sum(dim=1).mean()
+        
     def _is_action_valid(self, prediction, action_space):
         action_to_take = Categorical(prediction).sample()
         valid = action_space[action_to_take] != 0
@@ -149,16 +166,13 @@ class A2CAgent:
             masked_predictions = prediction[0] * action_space
             masked_predictions_scaled = masked_predictions / torch.sum(masked_predictions)
 
-            if int(random.random()*1000) % 500 == 0: 
+            if int(random.random()*10_000) % 5_000 == 0:
                 print("State is: ", state)
-                print("Prediction is: ", prediction)
-                print("Masked prediction is: ", masked_predictions)
+                print("Prediction: ", prediction[0])
 
             prediction_masked = Categorical(masked_predictions_scaled)
             
-            rw_decision = self._is_action_valid(prediction, action_space)
-
-            return  (prediction_masked.sample() + 1).item(), rw_decision ## esto devolvera un valor entre 1 y 57 que sera la eleccion del modelo
+            return  (prediction_masked.sample() + 1).item() ## esto devolvera un valor entre 1 y 57 que sera la eleccion del modelo
         
     def save_model(self, path: str = "model.pt") -> None:
         torch.save(self.model.state_dict(), path)
