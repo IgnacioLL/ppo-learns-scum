@@ -26,10 +26,10 @@ def convert_to_binary_tensor(data: list[list[int]], pass_option: bool = False) -
     else:
         return torch.tensor(np.append(np.array(result).flatten(), 0)).float().to(C.DEVICE)
 
-def print_rl_variables(reward: int, new_observation: np.array, finish: bool, epsilon: float) -> None:
+def print_rl_variables(reward: int, new_observation: np.array, done: bool, epsilon: float) -> None:
         print(f"The reward is: {reward}")
         print(f"The new observation is: {new_observation}")
-        print(f"The finish is: {finish}")
+        print(f"The done is: {done}")
         print(f"The epsilon is: {epsilon}")
 
 def download_from_s3() -> None:
