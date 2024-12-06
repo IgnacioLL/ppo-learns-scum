@@ -15,6 +15,7 @@ from tqdm import tqdm
 import argparse
 
 from typing import List
+import torch
 
 writer = SummaryWriter()
 
@@ -25,17 +26,30 @@ class A2CScum:
         self.total_steps = 0
         self.ep_rewards = [[] for _ in range(number_of_agents)]
         self.aggregate_stats_every = C.AGGREGATE_STATS_EVERY
+        self.train_models_every = C.TRAIN_MODELS_EVERY
+        self.swap_models_every = C.SWAPS_MODELS_EVERY
         self.callback = callback
     
     def learn(self, total_episodes):
+        assert self.swap_models_every >= self.aggregate_stats_every, "Aggregating statistics should be lower than swap models every for consistency."
+
         for episode in tqdm(range(1, total_episodes + 1), ascii=True, unit='episodes'):
             episode_rewards = self.run_episode(episode)
 
             self.append_rewards_to_historic_record(episode_rewards)
 
+            if episode % self.train_models_every == 0:
+                training_performance_stats = self.train_models()
+                self.flush_performance_stats_tensorboard(training_performance_stats, episode)
+
             if episode % self.aggregate_stats_every == 0:
-                average_rewards = self.get_average_reward_last_n_episodes(episode)
-                # self.agent_pool.swap_worst_models_for_best_ones(average_rewards)
+                average_rewards = self.get_average_reward_last_n_episodes(C.AGGREGATE_STATS_EVERY)
+                self.flush_average_reward_to_tensorboard(average_rewards, episode)
+            
+            if episode % self.swap_models_every == 0:
+                average_rewards = self.get_average_reward_last_n_episodes(C.AGGREGATE_STATS_EVERY) 
+                self.agent_pool.swap_worst_models_for_best_ones(average_rewards, 0.2)
+
 
 
     def eval(self, episodes):
@@ -46,8 +60,9 @@ class A2CScum:
         return ep_rewards
 
     def run_episode(self, episode, eval: bool=False):
-        done_agents = [False] * 5
-        episode_rewards = [0] * 5
+        done_agents = [False] * C.NUMBER_OF_AGENTS
+        episode_rewards = [0] * C.NUMBER_OF_AGENTS
+        all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
         self.env.reset()
 
         while np.array(done_agents).sum() != self.agent_pool.number_of_agents:
@@ -59,20 +74,21 @@ class A2CScum:
 
             done_agents[agent_number] = done
             episode_rewards[agent_number] += reward
+            all_rewards[agent_number].append(reward)
 
             agent.save_in_buffer(current_state, reward, new_state)
             
             if done:
                 current_state, new_state, reward = self.env.get_stats_after_done(agent_number=agent_number)
                 episode_rewards[agent_number] += reward
+                all_rewards[agent_number].append(reward)
+
                 agent.save_in_buffer(current_state, reward, new_state)
                 done_agents[agent_number] = done
 
             self.total_steps += 1
-        
-        if eval == False:
-            training_performance_stats = self.train_models()
-            self.flush_performance_stats_tensorboard(training_performance_stats, episode)
+
+        self.agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards)
 
         return episode_rewards
 
