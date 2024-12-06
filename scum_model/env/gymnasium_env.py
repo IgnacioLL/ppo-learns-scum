@@ -52,7 +52,7 @@ class ScumEnv(gym.Env):
     def reset(self) -> None:
         self.__init__(self.number_players)
     
-    def step(self, action: int, current_state: torch.tensor) -> Tuple[torch.tensor, int, bool, int]:
+    def step(self, action: int, current_state: torch.tensor):
         ## This will be the variables returned to compute the reward.
         ## We will use the past events to be able to compute the new states.
         agent_number = self.player_turn
