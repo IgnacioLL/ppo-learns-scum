@@ -41,7 +41,7 @@ class A2CModel(nn.Module):
 
     def create_big_model(self):
         self.chore_part = nn.Sequential(
-            nn.Linear(C.NUMBER_OF_POSSIBLE_STATES + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 256),
+            nn.Linear((C.NUMBER_OF_CARDS_PER_SUIT + 1) + 1 + (C.NUMBER_OF_CARDS_PER_SUIT + 1) + self.number_of_players, 256),
             nn.LayerNorm(256),
             nn.ReLU(),
             nn.Linear(256, 512),
@@ -65,7 +65,7 @@ class A2CModel(nn.Module):
 
     def create_medium_model(self):
         self.chore_part = nn.Sequential(
-            nn.Linear(C.NUMBER_OF_POSSIBLE_STATES + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 128),
+            nn.Linear((C.NUMBER_OF_CARDS_PER_SUIT + 1) + 1 + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 128),
             nn.LayerNorm(128),
             nn.ReLU(),
             nn.Linear(128, 128),
@@ -89,7 +89,7 @@ class A2CModel(nn.Module):
 
     def create_small_model(self):
         self.chore_part = nn.Sequential(
-            nn.Linear(C.NUMBER_OF_POSSIBLE_STATES + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 64),
+            nn.Linear((C.NUMBER_OF_CARDS_PER_SUIT + 1) + 1 + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 64),
             nn.ReLU()
         )
 
