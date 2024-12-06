@@ -14,6 +14,8 @@ class AgentPool:
         self.order = list(range(self.number_of_agents))
         self.previous_order = self.order.copy()
         self.previous_agents = self.agents.copy()
+        self.best_reward = 0
+        self.worst_reward = 0
 
     def _create_agents(self, load_checkpoints: bool, load_eval: bool, **kwargs):
         agents = []
@@ -38,10 +40,10 @@ class AgentPool:
         return self.get_agent(self.order[0])
 
 
-    def swap_worst_models_for_best_ones(self, average_rewards: List[float]) -> None:
+    def swap_worst_models_for_best_ones(self, average_rewards: List[float], tol=0.1) -> None:
         self.update_order(average_rewards)
         self.save_agents()
-        self.refresh_agents()
+        self.swap(tol=tol)
 
 
     def update_order(self, average_rewards: List[float]) -> None:
@@ -49,13 +51,22 @@ class AgentPool:
         order = np.argsort(average_rewards).tolist()
         order.reverse()
         self.order = order.copy()
+        self.best_reward = max(average_rewards)
+        self.worst_reward = min(average_rewards)
 
     def save_agents(self) -> None:
         self.previous_agents = self.agents.copy()
 
-    def refresh_agents(self) -> None:
-        worst_agent, second_worst_agent = self.order[-1], self.order[-2]
-        best_agent, second_best_agent = self.previous_order[0], self.previous_order[1]
+    def swap(self, tol) -> None:
+        worst_agent = self.order[-1]
+        best_agent = self.previous_order[0]
         
-        self.agents[worst_agent].model.load_state_dict(self.previous_agents[best_agent].model.state_dict())
-        self.agents[second_worst_agent].model.load_state_dict(self.previous_agents[second_best_agent].model.state_dict())
+        if (self.best_reward - self.worst_reward) > tol:
+            self.agents[worst_agent].model.load_state_dict(self.previous_agents[best_agent].model.state_dict())
+
+    def apply_discounted_returns_in_agents_buffer(self, episode_rewards):
+        for agent_number, agent_rewards in enumerate(episode_rewards):
+            agent = self.get_agent(agent_number)
+            agent.apply_discounted_returns_in_buffer(agent_rewards)
+
+        
