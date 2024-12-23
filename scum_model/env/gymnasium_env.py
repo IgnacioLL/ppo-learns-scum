@@ -258,7 +258,7 @@ class ScumEnv(gym.Env):
         players_info = move_to_last_position(players_info, self.player_turn)
         cards_thrown = self.get_cards_thrown()
 
-        state = torch.cat([action_space, torch.tensor(players_info), torch.tensor(cards_thrown)])
+        state = torch.cat([action_space, torch.tensor(players_info, device=C.DEVICE), torch.tensor(cards_thrown, device=C.DEVICE)])
         
         return state
 
