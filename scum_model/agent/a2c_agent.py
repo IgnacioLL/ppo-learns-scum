@@ -17,14 +17,14 @@ import numpy as np
 import torch.nn as nn
 import random
 
-from agent.a2c_model import A2CModel
+from nnet.nnet import NNet
 
 from utils.ml_utils import compute_grad_stats, compute_discounted_returns
 from utils.utils import compact_form_of_states
 
 class A2CAgent:
     def __init__(self, learning_rate: float = 1e-4, discount: float = None, number_players: int = C.NUMBER_OF_AGENTS, path: str = None, model="small", model_id=None, entropy_coef=0, policy_error_coef=1, value_error_coef=1):
-        self.model = A2CModel(number_of_players=number_players, model=model, id=model_id).to(C.DEVICE)
+        self.model = NNet(number_of_players=number_players, model=model, id=model_id).to(C.DEVICE)
         if path:
             self.model.load_state_dict(torch.load(path))
 

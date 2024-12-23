@@ -8,6 +8,11 @@ from config.constants import Constants as C
 import torch.nn as nn
 import uuid
 
+TWO_OF_HEARTS = 1
+PASS_ACTION = 1
+THROWN_CARDS_FEATURES = (C.NUMBER_OF_CARDS_PER_SUIT + 1)
+OTHER_PLAYERS_FEATURES = C.NUMBER_OF_AGENTS
+DIM_INPUT = (C.NUMBER_OF_CARDS_PER_SUIT + TWO_OF_HEARTS) + PASS_ACTION + THROWN_CARDS_FEATURES + OTHER_PLAYERS_FEATURES
 
 def hu_initialization(tensor):
     if isinstance(tensor, nn.Linear):
@@ -20,7 +25,7 @@ def hu_initialization(tensor):
             nn.init.normal_(tensor.bias, mean=0, std=std)  # Use a normal distribution for bias as well
 
 
-class A2CModel(nn.Module):
+class NNet(nn.Module):
     def __init__(self, number_of_players, model="big", id=None):
         super().__init__()
         self.number_of_players = number_of_players
@@ -41,7 +46,7 @@ class A2CModel(nn.Module):
 
     def create_big_model(self):
         self.chore_part = nn.Sequential(
-            nn.Linear((C.NUMBER_OF_CARDS_PER_SUIT + 1) + 1 + (C.NUMBER_OF_CARDS_PER_SUIT + 1) + self.number_of_players, 256),
+            nn.Linear(DIM_INPUT, 256),
             nn.LayerNorm(256),
             nn.ReLU(),
             nn.Linear(256, 512),
@@ -65,7 +70,7 @@ class A2CModel(nn.Module):
 
     def create_medium_model(self):
         self.chore_part = nn.Sequential(
-            nn.Linear((C.NUMBER_OF_CARDS_PER_SUIT + 1) + 1 + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 128),
+            nn.Linear(DIM_INPUT, 128),
             nn.LayerNorm(128),
             nn.ReLU(),
             nn.Linear(128, 128),
@@ -89,7 +94,7 @@ class A2CModel(nn.Module):
 
     def create_small_model(self):
         self.chore_part = nn.Sequential(
-            nn.Linear((C.NUMBER_OF_CARDS_PER_SUIT + 1) + 1 + C.NUMBER_OF_CARDS_PER_SUIT + 1 + self.number_of_players, 64),
+            nn.Linear(DIM_INPUT, 64),
             nn.ReLU()
         )
 
