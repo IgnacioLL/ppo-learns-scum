@@ -15,7 +15,7 @@ class Constants:
     DISCOUNT = .99
     UPDATE_TARGET_EVERY = 1_000
 
-    EPISODES = 200_000
+    EPISODES = 1_000_000
 
     REWARD_PASS = -0.1
     REWARD_CARD = 0.05
@@ -47,7 +47,7 @@ class Constants:
 
     WARMUP_STEPS = 25_000
     INITIAL_LR_FACTOR = 0.01  # Start with 1% of the target learning rate
-    TRAIN_MODELS_EVERY = 10
+    TRAIN_MODELS_EVERY = 50
 
     MODELS_PATH = f"models/"
 
