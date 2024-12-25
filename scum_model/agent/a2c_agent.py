@@ -19,7 +19,7 @@ import random
 
 from nnet.nnet import NNet
 
-from utils.ml_utils import compute_grad_stats, compute_discounted_returns
+from utils.ml_utils import compute_grad_stats, compute_discounted_returns, WarmupLRScheduler
 from utils.utils import compact_form_of_states
 
 class A2CAgent:
@@ -34,6 +34,12 @@ class A2CAgent:
         self.discount = discount if discount else C.DISCOUNT
 
         self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
+        self.scheduler = WarmupLRScheduler(
+            self.optimizer,
+            warmup_steps=C.WARMUP_STEPS,
+            initial_lr=learning_rate*C.INITIAL_LR_FACTOR,
+            target_lr=learning_rate
+        )
         self.buffer = {'states': [], 'rewards': [], 'new_states': [], 'returns': []}
         self.eps = np.finfo(np.float32).eps.item()
 
@@ -46,16 +52,12 @@ class A2CAgent:
         self.buffer['rewards'].append(reward)
         self.buffer['new_states'].append(new_state)
 
-    def clear_buffer(self):
-        self.buffer = {'states': [], 'rewards': [], 'new_states': [], 'returns': []}
-
-
     @torch.no_grad()
     def predict(self, state):
         _, probs = self.model(state)
         return probs
     
-    def train(self, step, batch_size=32):
+    def train(self, episode, batch_size=32):
 
         data = self.load_data_from_buffer()
         self.clear_buffer()
@@ -74,12 +76,71 @@ class A2CAgent:
 
         # Average metrics across batches
         return self.average_metrics(metrics, len(compact_states), batch_size)
+    
+    def load_data_from_buffer(self):
+        states = torch.stack([state.to(C.DEVICE) for state in self.buffer['states']])
+        returns = torch.tensor([reward for reward in self.buffer['returns']], device=C.DEVICE)
+        new_states = torch.stack([new_state.to(C.DEVICE) for new_state in self.buffer['new_states']])
+        action_masks = torch.stack([state[:C.NUMBER_OF_POSSIBLE_STATES].to(C.DEVICE) for state in self.buffer['states']])  # Assuming masks are stored
+        
+        return states, returns, new_states, action_masks
+    
+    def clear_buffer(self):
+        self.buffer = {'states': [], 'rewards': [], 'new_states': [], 'returns': []}
+    
+        
+    def remove_impossible_states(self, data):
+        states, rewards, new_states, action_masks = data
+        impossible_states = ~torch.all(states == 0, dim=1)
+        states = states[impossible_states]
+        rewards = rewards[impossible_states]
+        new_states = new_states[impossible_states]
+        action_masks = action_masks[impossible_states]
+
+        return states, rewards, new_states, action_masks
+    
+    
+    def shuffle_data(self, data):
+        states, returns, new_states, action_masks = data
+        num_transitions = len(states)
+
+        # Generate a permutation index
+        permutation = torch.randperm(num_transitions)
+
+        # Apply the permutation to shuffle the data
+        shuffled_states = states[permutation]
+        shuffled_rewards = returns[permutation]
+        shuffled_new_states = new_states[permutation]
+        shuffled_action_masks = action_masks[permutation]
+
+        return shuffled_states, shuffled_rewards, shuffled_new_states, shuffled_action_masks
+    
+    def initialize_metrics(self):
+        return {
+            'value_loss': 0,
+            'policy_loss': 0,
+            'entropy': 0,
+            'total_loss': 0,
+            'value_prediction_avg': 0,
+            'returns': 0,
+            'mean_gradient': 0,
+            'median_gradient': 0,
+            'max_gradient': 0,
+            'min_gradient': 0,
+            'p99_gradient': 0,
+            'p01_gradient': 0,
+            'advantadge': 0,
+            'advantadge_normalized': 0,
+            'learning_rate': 0
+        }
+
 
     def create_batches(self, compact_states, returns, action_space, batch_size):
         num_batches = (len(compact_states) + batch_size - 1) // batch_size
         for i in range(num_batches):
             start, end = i * batch_size, min((i + 1) * batch_size, len(compact_states))
             yield compact_states[start:end], returns[start:end], action_space[start:end]
+
 
     def train_on_batch(self, batch_states, batch_returns, batch_action_space):
         value_preds, policy_logits = self.model(batch_states)
@@ -110,6 +171,7 @@ class A2CAgent:
         gradient_stats = self.get_gradient_stats()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
+        self.scheduler.step()
 
         return {
             'value_loss': value_loss.item() * self.value_error_coef,
@@ -119,17 +181,27 @@ class A2CAgent:
             'value_prediction_avg': value_preds.squeeze().mean().item(),
             'returns': batch_returns.mean().item(),
             **gradient_stats,
-            'advantadge': advantadge_norm.mean().item()
+            'advantadge': advantadge.mean().item(), 
+            'advantadge_normalized': advantadge_norm.mean().item(),
+            "learning_rate": self.scheduler.get_current_learning_rate()
         }
+    
+    def mask_impossible_actions(self, action_masks, policy_logits):
+        masked_policy_logits = policy_logits.clone()
+        masked_policy_logits[(action_masks==0)] = float('-inf')
 
-    def initialize_metrics(self):
-        return {
-            'value_loss': 0, 'policy_loss': 0, 'entropy': 0, 'total_loss': 0,
-            'value_prediction_avg': 0, 'returns': 0, 'mean_gradient': 0,
-            'median_gradient': 0, 'max_gradient': 0, 'min_gradient': 0,
-            'p99_gradient': 0, 'p01_gradient': 0, 'advantadge': 0
-        }
-
+        return masked_policy_logits
+    
+    def compute_advantadge(self, returns, value_preds):
+        return returns - value_preds
+    
+    def compute_policy_error_with_masked_actions(self, policy_log_probs, advantages, action_space):
+        policy_loss = -(policy_log_probs * action_space) * advantages.unsqueeze(1).detach()
+        return policy_loss.mean()
+    
+    def compute_entropy(self, policy_probs, policy_log_probs):
+        return -(policy_probs * policy_log_probs).sum(dim=1).mean()
+    
     def accumulate_metrics(self, total_metrics, batch_metrics):
         for key in total_metrics:
             total_metrics[key] += batch_metrics[key]
@@ -148,78 +220,7 @@ class A2CAgent:
             'p99_gradient': p99_grad.item(),
             'p01_gradient': p01_grad.item(),
         }
-
-        
-    def load_data_from_buffer(self):
-        states = torch.stack([state.to(C.DEVICE) for state in self.buffer['states']])
-        returns = torch.tensor([reward for reward in self.buffer['returns']], device=C.DEVICE)
-        new_states = torch.stack([new_state.to(C.DEVICE) for new_state in self.buffer['new_states']])
-        action_masks = torch.stack([state[:C.NUMBER_OF_POSSIBLE_STATES].to(C.DEVICE) for state in self.buffer['states']])  # Assuming masks are stored
-        
-        return states, returns, new_states, action_masks
     
-    def shuffle_data(self, data):
-        states, returns, new_states, action_masks = data
-        num_transitions = len(states)
-
-        # Generate a permutation index
-        permutation = torch.randperm(num_transitions)
-
-        # Apply the permutation to shuffle the data
-        shuffled_states = states[permutation]
-        shuffled_rewards = returns[permutation]
-        shuffled_new_states = new_states[permutation]
-        shuffled_action_masks = action_masks[permutation]
-
-        return shuffled_states, shuffled_rewards, shuffled_new_states, shuffled_action_masks
-
-    
-    def remove_impossible_states(self, data):
-        states, rewards, new_states, action_masks = data
-        impossible_states = ~torch.all(states == 0, dim=1)
-        states = states[impossible_states]
-        rewards = rewards[impossible_states]
-        new_states = new_states[impossible_states]
-        action_masks = action_masks[impossible_states]
-
-        return states, rewards, new_states, action_masks
-    
-
-        
-    def mask_impossible_actions(self, action_masks, policy_logits):
-        masked_policy_logits = policy_logits.clone()
-        masked_policy_logits[(action_masks==0)] = float('-inf')
-
-        return masked_policy_logits
-    
-    def initialize_batch_metrics(self):
-        batch_metrics = {
-            'value_loss': 0,
-            'policy_loss': 0,
-            'entropy': 0,
-            'total_loss': 0,
-            'value_prediction_avg': 0,
-            'returns': 0,
-            'mean_gradient': 0,
-            'median_gradient': 0,
-            'max_gradient': 0,
-            'min_gradient': 0,
-            'p99_gradient': 0,
-            'p01_gradient': 0,
-            'advantadge': 0
-        }
-        return batch_metrics
-    
-    def compute_advantadge(self, returns, value_preds):
-        return returns - value_preds
-    
-    def compute_policy_error_with_masked_actions(self, policy_log_probs, advantages, action_space):
-        policy_loss = -(policy_log_probs * action_space) * advantages.unsqueeze(1).detach()
-        return policy_loss.mean()
-    
-    def compute_entropy(self, policy_probs, policy_log_probs):
-        return -(policy_probs * policy_log_probs).sum(dim=1).mean()
-        
     def _is_action_valid(self, prediction, action_space):
         action_to_take = Categorical(prediction).sample()
         valid = action_space[action_to_take] != 0
@@ -248,16 +249,6 @@ class A2CAgent:
     def load_model(self, path: str = "model.pt") -> nn.Module:
         model = torch.load(path)
         return model
-
-    def warmup_learning_rate(self, step):
-        if step < C.WARMUP_STEPS:
-            self.current_learning_rate = self.initial_learning_rate + (self.learning_rate - self.initial_learning_rate) * (step / C.WARMUP_STEPS)
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.current_learning_rate
-        elif step == C.WARMUP_STEPS:
-            self.current_learning_rate = self.learning_rate
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.current_learning_rate
 
     def create_only_pass_state(self):
         return torch.tensor([0 for _ in range((C.NUMBER_OF_POSSIBLE_STATES - 1) + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1)] + [1],
