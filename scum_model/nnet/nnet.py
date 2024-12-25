@@ -32,64 +32,43 @@ class NNet(nn.Module):
         self.size = model
         self.id = str(uuid.uuid4()) if id is None else id
 
+        if model == "large":
+            self.create_model(neurons=1024)
+
         if model == "big":
-            self.create_big_model()
+            self.create_model(neurons=256)
 
         elif model == "medium":
-            self.create_medium_model()
+            self.create_model(neurons=128)
 
         elif model == "small":
-            self.create_small_model()
+            self.create_small_model(neurons=64)
         
         self.softmax = nn.Softmax(dim=-1)
         self.apply(hu_initialization)
 
-    def create_big_model(self):
+    def create_model(self, neurons):
         self.chore_part = nn.Sequential(
-            nn.Linear(DIM_INPUT, 256),
-            nn.LayerNorm(256),
+            nn.Linear(DIM_INPUT, neurons),
+            nn.LayerNorm(neurons),
             nn.ReLU(),
-            nn.Linear(256, 512),
-            nn.LayerNorm(512),
+            nn.Linear(neurons, neurons*2),
+            nn.LayerNorm(neurons*2),
             nn.ReLU()
         )
 
         self.value_estimate = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.LayerNorm(256),
+            nn.Linear(neurons*2, neurons),
+            nn.LayerNorm(neurons),
             nn.ReLU(), 
-            nn.Linear(256, 1)
+            nn.Linear(neurons, 1)
         )
         
         self.policy_probability = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.LayerNorm(256),
+            nn.Linear(neurons*2, neurons),
+            nn.LayerNorm(neurons),
             nn.ReLU(), 
-            nn.Linear(256, C.NUMBER_OF_POSSIBLE_STATES)
-        )
-
-    def create_medium_model(self):
-        self.chore_part = nn.Sequential(
-            nn.Linear(DIM_INPUT, 128),
-            nn.LayerNorm(128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.LayerNorm(128),
-            nn.ReLU()
-        )
-
-        self.value_estimate = nn.Sequential(
-            nn.Linear(128, 128),
-            nn.LayerNorm(128),
-            nn.ReLU(), 
-            nn.Linear(128, 1)
-        )
-        
-        self.policy_probability = nn.Sequential(
-            nn.Linear(128, 128),
-            nn.LayerNorm(128),
-            nn.ReLU(), 
-            nn.Linear(128, C.NUMBER_OF_POSSIBLE_STATES)
+            nn.Linear(neurons, C.NUMBER_OF_POSSIBLE_STATES)
         )
 
     def create_small_model(self):
