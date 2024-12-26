@@ -87,29 +87,6 @@ class ScumEnv(gym.Env):
 
         return previous_state, new_state, previous_reward, done, agent_number
     
-
-    def decide_move(self, state: torch.tensor, epsilon: float=1, agent: torch.nn.Module=None) -> int:
-        action_space = state[:C.NUMBER_OF_POSSIBLE_STATES]
-        if state is None:
-            state = torch.tensor([0 for _ in range((C.NUMBER_OF_POSSIBLE_STATES - 1) + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1)] + [1], dtype=torch.float32).to(C.DEVICE)
-        if random.random() < epsilon:
-            action_space_list = action_space.cpu().detach().numpy()
-            indices = [i for i, x in enumerate(action_space_list) if x == 1]
-            return random.choice(indices) + 1
-        else:
-            prediction = agent.predict(state, target=True)
-            print("Using model to decide move")
-            print("Prediction made by the model is: ", prediction[0].cpu().detach().numpy().round(2))
-            
-            # We set a large negative value to the masked predictions that are not possible
-            masked_predictions = prediction[0] * action_space
-            masked_predictions_npy  = masked_predictions.cpu().detach().numpy()
-
-            masked_predictions_npy[masked_predictions_npy == 0] = float("-inf")
-            
-            return np.argsort(masked_predictions_npy)[-1] + 1  ## esto devolvera un valor entre 1 y 57 que sera la eleccion del modelo
-    
-    
     def render(self, mode='human'):
         """Render the environment (optional)"""
         print(f"Current State: {self.cards}")
@@ -156,8 +133,6 @@ class ScumEnv(gym.Env):
             cls._extract_higher_order(cards, 3),
             cls._extract_higher_order(cards, 4)
         ]
-
-
 
     def _next_turn(self) -> int:
         next_player = (self.player_turn + 1) % self.number_players
