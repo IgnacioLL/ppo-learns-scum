@@ -5,6 +5,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 from config.constants import Constants as C
 
+import torch
+from torch.optim.lr_scheduler import _LRScheduler
+
 def compute_grad_stats(model):
     grads = []
     for param in model.parameters():
@@ -31,9 +34,6 @@ def compute_discounted_returns(rewards: list, discount) -> torch.tensor:
         returns.insert(0, G)
     return torch.tensor(returns, device=C.DEVICE)
 
-
-import torch
-from torch.optim.lr_scheduler import _LRScheduler
 
 class WarmupLRScheduler(_LRScheduler):
     """
