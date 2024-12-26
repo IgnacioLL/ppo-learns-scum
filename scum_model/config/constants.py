@@ -29,10 +29,6 @@ class Constants:
 
     REWARD_EMPTY_HAND = 0.2
 
-    EPSILON = 1
-    EPSILON_DECAY = 0.999
-    MIN_EPSILON = 0.01
-
     DEVICE = (
         "cuda"
         if torch.cuda.is_available()
