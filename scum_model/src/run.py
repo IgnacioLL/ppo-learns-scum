@@ -42,7 +42,7 @@ DEFAULT_HYPERPARAMS = {
     "learning_rate": 1e-3, 
     "model":"large", 
     "policy_error_coef": 1,
-    "value_error_coef": 0.1,
+    "value_error_coef": 0.01, # The advantadge is of low magnitude
     "entropy_coef": 0
 }
 
