@@ -152,12 +152,7 @@ class A2CAgent:
 
         advantadge = self.compute_advantadge(batch_returns, value_preds)
 
-        if len(advantadge) == 1:
-            advantadge_norm = torch.zeros_like(advantadge)
-        else:
-            advantadge_norm = (advantadge - advantadge.mean()) / (advantadge.std() + 1e-10)
-
-        policy_loss = self.compute_policy_error_with_masked_actions(masked_policy_log_probs, advantadge_norm, batch_action_space)
+        policy_loss = self.compute_policy_error_with_masked_actions(masked_policy_log_probs, advantadge, batch_action_space)
         value_loss = F.mse_loss(value_preds, batch_returns).mean()
         entropy = self.compute_entropy(masked_policy_probs, masked_policy_log_probs)
         total_loss = (
@@ -182,7 +177,7 @@ class A2CAgent:
             'returns': batch_returns.mean().item(),
             **gradient_stats,
             'advantadge': advantadge.mean().item(), 
-            'advantadge_normalized': advantadge_norm.mean().item(),
+            'advantadge_normalized': 0,
             "learning_rate": self.scheduler.get_current_learning_rate()
         }
     
