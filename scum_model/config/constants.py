@@ -12,7 +12,7 @@ class Constants:
     NUMBER_OF_POSSIBLE_STATES = (NUMBER_OF_CARDS_PER_SUIT+1)*NUMBER_OF_SUITS + 1
 
     BATCH_SIZE = 64
-    DISCOUNT = .99
+    DISCOUNT = .975
     UPDATE_TARGET_EVERY = 1_000
 
     EPISODES = 1_000_000
@@ -43,7 +43,6 @@ class Constants:
     
     AGGREGATE_STATS_EVERY = 1_000
     SWAPS_MODELS_EVERY = 10_000
-
 
     WARMUP_STEPS = 25_000
     INITIAL_LR_FACTOR = 0.01  # Start with 1% of the target learning rate
