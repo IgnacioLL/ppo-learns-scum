@@ -40,17 +40,18 @@ class A2CAgent:
             initial_lr=learning_rate*C.INITIAL_LR_FACTOR,
             target_lr=learning_rate
         )
-        self.buffer = {'states': [], 'rewards': [], 'new_states': [], 'returns': []}
+        self.buffer = {'states': [], 'rewards': [], 'new_states': [], 'returns': [], 'actions': []}
         self.eps = np.finfo(np.float32).eps.item()
 
         self.policy_error_coef = policy_error_coef
         self.value_error_coef = value_error_coef
         self.entropy_coef = entropy_coef
 
-    def save_in_buffer(self, current_state, reward, new_state):
+    def save_in_buffer(self, current_state, reward, new_state, action):
         self.buffer['states'].append(current_state)
         self.buffer['rewards'].append(reward)
         self.buffer['new_states'].append(new_state)
+        self.buffer['actions'].append(action)
 
     @torch.no_grad()
     def predict(self, state):
@@ -131,7 +132,8 @@ class A2CAgent:
             'p01_gradient': 0,
             'advantadge': 0,
             'advantadge_normalized': 0,
-            'learning_rate': 0
+            'learning_rate': 0,
+            "variance_in_logits": 0
         }
 
 
@@ -152,7 +154,13 @@ class A2CAgent:
 
         advantadge = self.compute_advantadge(batch_returns, value_preds)
 
-        policy_loss = self.compute_policy_error_with_masked_actions(masked_policy_log_probs, advantadge, batch_action_space)
+        if len(advantadge) == 1:
+            advantadge_norm = torch.zeros_like(advantadge)
+        else:
+            advantadge_norm = (advantadge - advantadge.mean()) / (advantadge.std() + 1e-10)
+
+        policy_loss = self.compute_policy_error_with_masked_actions(masked_policy_log_probs, advantadge_norm, batch_action_space)
+       
         value_loss = F.mse_loss(value_preds, batch_returns).mean()
         entropy = self.compute_entropy(masked_policy_probs, masked_policy_log_probs)
         total_loss = (
@@ -177,8 +185,9 @@ class A2CAgent:
             'returns': batch_returns.mean().item(),
             **gradient_stats,
             'advantadge': advantadge.mean().item(), 
-            'advantadge_normalized': 0,
-            "learning_rate": self.scheduler.get_current_learning_rate()
+            'advantadge_normalized': advantadge_norm.mean().item(),
+            "learning_rate": self.scheduler.get_current_learning_rate(),
+            'variance_in_logits': policy_logits.std().item() 
         }
     
     def mask_impossible_actions(self, action_masks, policy_logits):
