@@ -30,7 +30,7 @@ class AgentPool:
 
         return agents
 
-    def get_agent(self, agent_number):
+    def get_agent(self, agent_number: int):
         return self.agents[agent_number]
 
     def set_agent(self, agent: A2CAgent, agent_number: int = 0) -> None:
@@ -68,5 +68,10 @@ class AgentPool:
         for agent_number, agent_rewards in enumerate(episode_rewards):
             agent = self.get_agent(agent_number)
             agent.apply_discounted_returns_in_buffer(agent_rewards)
+
+    
+    def save_models_w_prefix(self, prefix=""):
+        for agent_number in range(self.number_of_agents):
+            self.agents[agent_number].save_model(f"{C.MODELS_PATH}/{prefix}_model_{agent_number}.pt")
 
         
