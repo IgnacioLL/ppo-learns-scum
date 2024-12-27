@@ -5,6 +5,7 @@ from agent.a2c_agent import A2CAgent
 from typing import List
 import numpy as np
 from config.constants import Constants as C
+import datetime
 
 class AgentPool:
     def __init__(self, num_agents: int, load_checkpoints: bool = False, load_eval: bool = False, **kwargs):
@@ -70,8 +71,9 @@ class AgentPool:
             agent.apply_discounted_returns_in_buffer(agent_rewards)
 
     
-    def save_models_w_prefix(self, prefix=""):
+    def save_models_w_prefix(self, episode, prefix=""):
+        time = datetime.datetime.now().strftime("%d%m%Y-%H%M%S")
         for agent_number in range(self.number_of_agents):
-            self.agents[agent_number].save_model(f"{C.MODELS_PATH}/{prefix}_model_{agent_number}.pt")
+            self.agents[agent_number].save_model(f"{C.MODELS_PATH}/{prefix}_model_{agent_number}_{str(episode)}_{time}.pt")
 
         
