@@ -44,10 +44,9 @@ def upload_to_s3() -> None:
 
 def move_to_last_position(list: List, position: int) -> List:
     list_to_change = list.copy()
-    scalar_position = list_to_change[position]
+    scalar_n_cards = list_to_change[position]
     del list_to_change[position]
-    list_to_change.sort()
-    list_to_change.append(scalar_position)
+    list_to_change.append(scalar_n_cards)
 
     return list_to_change
 
