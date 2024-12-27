@@ -44,5 +44,7 @@ class Constants:
     INITIAL_LR_FACTOR = 0.01  # Start with 1% of the target learning rate
     TRAIN_MODELS_EVERY = 50
 
+    CREATE_CHECKPOINT_EVERY = 50_000
+
     MODELS_PATH = f"models/"
 
