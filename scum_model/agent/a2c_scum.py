@@ -28,6 +28,7 @@ class A2CScum:
         self.aggregate_stats_every = C.AGGREGATE_STATS_EVERY
         self.train_models_every = C.TRAIN_MODELS_EVERY
         self.swap_models_every = C.SWAPS_MODELS_EVERY
+        self.create_checkpoint_every = C.CREATE_CHECKPOINT_EVERY
         self.callback = callback
     
     def learn(self, total_episodes):
@@ -50,7 +51,8 @@ class A2CScum:
                 average_rewards = self.get_average_reward_last_n_episodes(C.AGGREGATE_STATS_EVERY) 
                 self.agent_pool.swap_worst_models_for_best_ones(average_rewards, 0.2)
 
-
+            if episode % self.create_checkpoint_every == 0:
+                self.agent_pool.save_models_w_prefix(episode, prefix="big")
 
     def eval(self, episodes):
         ep_rewards = []
@@ -65,32 +67,29 @@ class A2CScum:
         all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
         self.env.reset()
 
-        while np.array(done_agents).sum() != self.agent_pool.number_of_agents:
+        while self.check_all_agents_done(done_agents):
             agent = self.agent_pool.get_agent(self.env.player_turn)
 
-            state = self.env.get_cards_to_play()
-            action = agent.decide_move(state)
-            current_state, new_state, reward, done, agent_number = self.env.step(action, state)
+            state = self.env.get_state()
+            action_space = self.env.get_action_space()
+            action = agent.decide_move(state, action_space)
+            current_state, reward, done, agent_number = self.env.step(action, state)
 
             done_agents[agent_number] = done
             episode_rewards[agent_number] += reward
             all_rewards[agent_number].append(reward)
 
-            agent.save_in_buffer(current_state, reward, new_state)
+            agent.save_in_buffer(current_state, reward, action_space)
             
-            if done:
-                current_state, new_state, reward = self.env.get_stats_after_done(agent_number=agent_number)
-                episode_rewards[agent_number] += reward
-                all_rewards[agent_number].append(reward)
-
-                agent.save_in_buffer(current_state, reward, new_state)
-                done_agents[agent_number] = done
-
             self.total_steps += 1
 
         self.agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards)
 
         return episode_rewards
+    
+    def check_all_agents_done(self, done_agents) -> bool:
+        return np.array(done_agents).sum() != self.agent_pool.number_of_agents
+
 
     def train_models(self):
         performance_stats = {}
