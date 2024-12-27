@@ -40,18 +40,17 @@ class A2CAgent:
             initial_lr=learning_rate*C.INITIAL_LR_FACTOR,
             target_lr=learning_rate
         )
-        self.buffer = {'states': [], 'rewards': [], 'new_states': [], 'returns': [], 'actions': []}
+        self.buffer = {'states': [], 'rewards': [], 'returns': [], 'action_space': []}
         self.eps = np.finfo(np.float32).eps.item()
 
         self.policy_error_coef = policy_error_coef
         self.value_error_coef = value_error_coef
         self.entropy_coef = entropy_coef
 
-    def save_in_buffer(self, current_state, reward, new_state, action):
+    def save_in_buffer(self, current_state, reward, action_space):
         self.buffer['states'].append(current_state)
         self.buffer['rewards'].append(reward)
-        self.buffer['new_states'].append(new_state)
-        self.buffer['actions'].append(action)
+        self.buffer['action_space'].append(action_space)
 
     @torch.no_grad()
     def predict(self, state):
@@ -64,7 +63,7 @@ class A2CAgent:
         self.clear_buffer()
 
         data = self.remove_impossible_states(data)
-        states, returns, _, action_space = self.shuffle_data(data)
+        states, returns, action_space = self.shuffle_data(data)
         compact_states = torch.stack([compact_form_of_states(state) for state in states])
 
         # Initialize metrics
@@ -81,28 +80,26 @@ class A2CAgent:
     def load_data_from_buffer(self):
         states = torch.stack([state.to(C.DEVICE) for state in self.buffer['states']])
         returns = torch.tensor([reward for reward in self.buffer['returns']], device=C.DEVICE)
-        new_states = torch.stack([new_state.to(C.DEVICE) for new_state in self.buffer['new_states']])
-        action_masks = torch.stack([state[:C.NUMBER_OF_POSSIBLE_STATES].to(C.DEVICE) for state in self.buffer['states']])  # Assuming masks are stored
+        action_masks = torch.stack([action_space.to(C.DEVICE) for action_space in self.buffer['action_space']])
         
-        return states, returns, new_states, action_masks
+        return states, returns, action_masks
     
     def clear_buffer(self):
-        self.buffer = {'states': [], 'rewards': [], 'new_states': [], 'returns': []}
+        self.buffer = {'states': [], 'rewards': [], 'returns': [], 'action_space': []}
     
         
     def remove_impossible_states(self, data):
-        states, rewards, new_states, action_masks = data
+        states, rewards, action_masks = data
         impossible_states = ~torch.all(states == 0, dim=1)
         states = states[impossible_states]
         rewards = rewards[impossible_states]
-        new_states = new_states[impossible_states]
         action_masks = action_masks[impossible_states]
 
-        return states, rewards, new_states, action_masks
+        return states, rewards, action_masks
     
     
     def shuffle_data(self, data):
-        states, returns, new_states, action_masks = data
+        states, returns, action_masks = data
         num_transitions = len(states)
 
         # Generate a permutation index
@@ -111,10 +108,9 @@ class A2CAgent:
         # Apply the permutation to shuffle the data
         shuffled_states = states[permutation]
         shuffled_rewards = returns[permutation]
-        shuffled_new_states = new_states[permutation]
         shuffled_action_masks = action_masks[permutation]
 
-        return shuffled_states, shuffled_rewards, shuffled_new_states, shuffled_action_masks
+        return shuffled_states, shuffled_rewards, shuffled_action_masks
     
     def initialize_metrics(self):
         return {
@@ -230,8 +226,7 @@ class A2CAgent:
         valid = action_space[action_to_take] != 0
         return C.REWARD_CHOOSE_IMPOSIBLE_ACTION if valid == False else 0
     
-    def decide_move(self, state: torch.tensor) -> int:
-        action_space = state[:C.NUMBER_OF_POSSIBLE_STATES]
+    def decide_move(self, state: torch.tensor, action_space) -> int:
         if state is None:
             state = self.create_only_pass_state()
         else:
