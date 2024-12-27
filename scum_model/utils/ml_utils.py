@@ -66,4 +66,7 @@ class WarmupLRScheduler(_LRScheduler):
     
 
     def get_current_learning_rate(self):
-        return self.initial_lr + self.lr_step * self.last_epoch
+        if self.last_epoch >= self.warmup_steps:
+            return self.target_lr
+        else:
+            return self.initial_lr + self.lr_step * self.last_epoch
