@@ -43,6 +43,7 @@ class Constants:
     WARMUP_STEPS = 25_000
     INITIAL_LR_FACTOR = 0.01  # Start with 1% of the target learning rate
     TRAIN_MODELS_EVERY = 50
+    N_EPOCH_PER_STEP = 10
 
     CREATE_CHECKPOINT_EVERY = 50_000
 
