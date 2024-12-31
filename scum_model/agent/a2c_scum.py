@@ -72,14 +72,14 @@ class A2CScum:
 
             state = self.env.get_state()
             action_space = self.env.get_action_space()
-            action = agent.decide_move(state, action_space)
+            action, log_prob = agent.decide_move(state, action_space)
             current_state, reward, done, agent_number = self.env.step(action, state)
 
             done_agents[agent_number] = done
             episode_rewards[agent_number] += reward
             all_rewards[agent_number].append(reward)
 
-            agent.save_in_buffer(current_state, reward, action_space)
+            agent.save_in_buffer(current_state, reward, action_space, action, log_prob)
             
             self.total_steps += 1
 
@@ -128,10 +128,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the Scum Environment simulation")
     parser.add_argument("-n", "--number_of_agents", type=int, default=C.NUMBER_OF_AGENTS, help="Number of agents in the simulation")
     parser.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Learning rate for the agents")
-    parser.add_argument("-e", "--epsilon", type=float, default=0.1, help="Initial epsilon value for epsilon-greedy strategy")
     parser.add_argument("-lc", "--load_checkpoints", action="store_true", help="Load checkpoints if available")
     parser.add_argument("-ep", "--episodes", type=int, default=C.EPISODES, help="Number of episodes to run")
-    parser.add_argument("-as", "--aggregate_stats_every", type=int, default=C.AGGREGATE_STATS_EVERY, help="Aggregate stats every N episodes")
 
     args = parser.parse_args()
 
