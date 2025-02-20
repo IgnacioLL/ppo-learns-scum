@@ -5,33 +5,49 @@ from agent.a2c_agent import A2CAgent
 from typing import List
 import numpy as np
 from config.constants import Constants as C
-import datetime
 
 class AgentPool:
-    def __init__(self, num_agents: int, load_checkpoints: bool = False, load_eval: bool = False, **kwargs):
+    def __init__(self, num_agents: int, **kwargs):
 
         self.number_of_agents = num_agents
-        self.agents = self._create_agents(load_checkpoints, load_eval, **kwargs)
+        self.agents = self._create_agents(**kwargs)
         self.order = list(range(self.number_of_agents))
         self.previous_order = self.order.copy()
         self.previous_agents = self.agents.copy()
         self.best_reward = 0
         self.worst_reward = 0
 
-    def _create_agents(self, load_checkpoints: bool, load_eval: bool, **kwargs):
+
+    def get_which_agent_training(self):
+        for agent_number in range(self.number_of_agents):
+            if self.agents[agent_number].training:
+                return agent_number
+
+
+    def refresh_agents_with_previous_executions(self, **kwargs) -> List[A2CAgent]:
+        files = os.listdir(f"{C.MODELS_PATH}")
+        executed_episodes = [int(file.split("_")[1]) for file in files]
+        executed_episodes.sort()
+        executed_episodes = executed_episodes[-(self.number_of_agents-1):]
+        
+        if executed_episodes >= (self.number_of_agents - 1):
+            for agent_number, episode in zip(range(1, self.number_of_agents), executed_episodes):
+                path = f"{C.MODELS_PATH}/model_{str(episode)}.pt"
+                self.agents[agent_number] = A2CAgent(number_players=self.number_of_agents, path=path, **kwargs)
+
+        else:
+            for agent_number, episode in zip(range(1, self.number_of_agents), executed_episodes):
+                self.agents[agent_number] = A2CAgent(number_players=self.number_of_agents, path=None, **kwargs)
+
+    def _create_agents(self, **kwargs) -> List[A2CAgent]:
         agents = []
         for i in range(self.number_of_agents):
-            agent_kwargs = kwargs.copy()
-            if load_checkpoints:
-                agent_kwargs['path'] = f"{C.CHECKPOINTS_PATH}/agent_{i+1}.pt"
-            if load_eval:
-                agent_kwargs['path'] = f"best_models/agent_1.pt"
-            agent = A2CAgent(number_players=self.number_of_agents, **agent_kwargs)
+            agent = A2CAgent(number_players=self.number_of_agents, **kwargs)
             agents.append(agent)
-
+        agents[0].set_training(True)
         return agents
 
-    def get_agent(self, agent_number: int):
+    def get_agent(self, agent_number: int) -> A2CAgent:
         return self.agents[agent_number]
 
     def set_agent(self, agent: A2CAgent, agent_number: int = 0) -> None:
@@ -71,9 +87,9 @@ class AgentPool:
             agent.apply_discounted_returns_in_buffer(agent_rewards)
 
     
-    def save_models_w_prefix(self, episode, prefix=""):
-        time = datetime.datetime.now().strftime("%d%m%Y-%H%M%S")
+    def save_models(self, episode):
         for agent_number in range(self.number_of_agents):
-            self.agents[agent_number].save_model(f"{C.MODELS_PATH}/{prefix}_model_{agent_number}_{str(episode)}_{time}.pt")
+            if self.agents[agent_number].training:
+                self.agents[agent_number].save_model(f"{C.MODELS_PATH}/model_{str(episode)}.pt")
 
         

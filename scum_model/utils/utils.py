@@ -7,9 +7,13 @@ import numpy as np
 import torch
 from config.constants import Constants as C
 import boto3
+import random
 from typing import List
+import psutil
+import os
+    
 
-def convert_to_binary_tensor(data: list[list[int]], pass_option: bool = False) -> torch.tensor:
+def convert_to_binary_tensor(data: list[list[int]], pass_option: bool = False) -> torch.Tensor:
     result = [[0] * 14 for _ in range(4)]
 
     # Convert each subarray (after the first) to a set for O(1) membership checks
@@ -60,6 +64,40 @@ def compact_form_of_states(states: torch.tensor) -> torch.tensor:
 
     return compact_state
 
+
+def shuffle_list(input_list):
+    "Randomly reorders the elements in a list."
+    shuffled = input_list.copy()
+    random.shuffle(shuffled)
+    return shuffled
+
+
+def log_vram_memory(tag=""):
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated() / (1024 * 1024)
+        reserved = torch.cuda.memory_reserved() / (1024 * 1024)
+        print(f"MEMORY [{tag}] - Allocated: {allocated:.4f}MB, Reserved: {reserved:.4f}MB")
+
+
+def log_ram_memory(tag=""):
+    """
+    Log current RAM (system memory) usage with an optional tag to identify where it's called from.
+    """
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    
+    rss_mb = memory_info.rss / (1024 * 1024)  # Resident Set Size
+    vms_mb = memory_info.vms / (1024 * 1024)  # Virtual Memory Size
+    
+    system_memory = psutil.virtual_memory()
+    system_used_percent = system_memory.percent
+    system_used_mb = system_memory.used / (1024 * 1024)
+    system_total_mb = system_memory.total / (1024 * 1024)
+    
+    print(f"RAM MEMORY [{tag}]:")
+    print(f"  Process RSS: {rss_mb:.2f}MB (actual memory used by process)")
+    print(f"  Process VMS: {vms_mb:.2f}MB (virtual memory allocated)")
+    print(f"  System Usage: {system_used_mb:.0f}MB / {system_total_mb:.0f}MB ({system_used_percent}%)")
 
 if __name__ == "__main__":
     upload_to_s3()

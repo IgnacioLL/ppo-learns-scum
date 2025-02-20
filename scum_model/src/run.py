@@ -9,8 +9,8 @@ from config.constants import Constants as C
 
 DEFAULT_HYPERPARAMS = {
     "number_of_agents": 5,
-    "load_checkpoints": False,
-    "learning_rate": 1e-3, 
+    "load_checkpoints": True,
+    "learning_rate": 1e-4, 
     "model":"large", 
     "policy_error_coef": 1,
     "value_error_coef": 1, # The advantadge is of low magnitude

@@ -38,14 +38,14 @@ class Constants:
     )
     
     AGGREGATE_STATS_EVERY = 1_000
-    SWAPS_MODELS_EVERY = 10_000
 
     WARMUP_STEPS = 25_000
-    INITIAL_LR_FACTOR = 0.01  # Start with 1% of the target learning rate
-    TRAIN_MODELS_EVERY = 50
+    INITIAL_LR_FACTOR = 0.05  
+    TRAIN_MODELS_EVERY = 200
     N_EPOCH_PER_STEP = 10
 
-    CREATE_CHECKPOINT_EVERY = 50_000
+    CREATE_CHECKPOINT_EVERY = 5_000
+    ASSESS_MODEL = 10_000
 
     MODELS_PATH = f"models/"
 

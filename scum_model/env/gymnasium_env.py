@@ -48,6 +48,8 @@ class ScumEnv(gym.Env):
         # Set initial state
         self.done = False
 
+        self.winner_player = None
+
     def reset(self) -> None:
         self.__init__(self.number_players)
 
@@ -56,7 +58,7 @@ class ScumEnv(gym.Env):
         print(f"Current State: {self.cards}")
 
     
-    def step(self, action: int, current_state: torch.tensor):
+    def step(self, action: int, current_state: torch.Tensor):
         agent_number = self.player_turn
 
         # Update previous state to the new state
@@ -83,7 +85,7 @@ class ScumEnv(gym.Env):
         ## This changes self.player_turn
         self._update_player_turn(skip)
 
-        return current_state, total_reward, done, agent_number
+        return current_state.detach(), total_reward, done, agent_number
     
     def _decode_action(self, action: int) -> Tuple[int, int]:
         n_cards = action // (C.NUMBER_OF_CARDS_PER_SUIT + 1)
@@ -157,6 +159,7 @@ class ScumEnv(gym.Env):
             self.player_order[self.player_position_ending] = self.player_turn
             if self.player_position_ending == 0:
                 done_reward = C.REWARD_WIN
+                self.winner_player = self.player_turn
             elif self.player_position_ending == 1:
                 done_reward = C.REWARD_SECOND
             elif self.player_position_ending == self.number_players - 2:
@@ -184,7 +187,7 @@ class ScumEnv(gym.Env):
         self.previous_done[self.player_turn] = done
 
     
-    def get_state(self) -> torch.tensor:
+    def get_state(self) -> torch.Tensor:
         if sum(self.players_in_game) == 0:
             return
 
@@ -201,19 +204,19 @@ class ScumEnv(gym.Env):
         compact_action_space = compact_form_of_states(self.get_action_space())
 
         state = torch.cat([cards, compact_action_space.to(C.DEVICE), torch.tensor(players_info, device=C.DEVICE), torch.tensor(cards_thrown, device=C.DEVICE)])
-        
-        return state
+        del cards, compact_action_space, players_info, cards_thrown
+        return state.detach()
 
-    def get_action_space(self) -> np.array:
+    def get_action_space(self) -> torch.Tensor:
         if self.last_move is None:
             return self._get_cards_to_play_init()
         else:
             return self._get_cards_to_play_followup()
 
-    def _get_cards_to_play_init(self) -> torch.tensor:
-        return convert_to_binary_tensor(self.cards[self.player_turn], pass_option=False) ## the pass action which is not available in the first move
+    def _get_cards_to_play_init(self) -> torch.Tensor:
+        return convert_to_binary_tensor(self.cards[self.player_turn], pass_option=False).detach() ## the pass action which is not available in the first move
 
-    def _get_cards_to_play_followup(self) -> torch.tensor:
+    def _get_cards_to_play_followup(self) -> torch.Tensor:
         n_cards = self.last_move[1]
         two_of_hearts = [C.NUMBER_OF_CARDS_PER_SUIT + 1] if C.NUMBER_OF_CARDS_PER_SUIT + 1 in self.cards[self.player_turn][0] else []
         possibilities = self.cards[self.player_turn][n_cards]
@@ -225,7 +228,7 @@ class ScumEnv(gym.Env):
         else:
             cards = [cards for cards in possibilities if cards >= self.last_move[0]] + two_of_hearts
         cards = [cards if index == n_cards else [] for index in range(4)]
-        return convert_to_binary_tensor(cards, pass_option=True) ## add the pass action
+        return convert_to_binary_tensor(cards, pass_option=True).detach() ## add the pass action
 
     def get_number_cards_x_person(self) -> List[int]:
         return [self._compute_cards_x_player(cards_player[0]) for cards_player in self.cards]
@@ -306,3 +309,7 @@ class ScumEnv(gym.Env):
         print("Prediction made by the model is: ", prediction)
         print("Masked probabilities are: ", masked_probabilities)
         print("-"*100)
+
+    
+    def get_winner_player(self):
+        return self.winner_player
