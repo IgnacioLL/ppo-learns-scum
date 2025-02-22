@@ -5,8 +5,11 @@ import math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 from config.constants import Constants as C
+import torch
 import torch.nn as nn
 import uuid
+
+from typing import Tuple
 
 TWO_OF_HEARTS = 1
 PASS_ACTION = 1
@@ -48,7 +51,7 @@ class NNet(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
         self.apply(hu_initialization)
 
-    def create_model(self, neurons):
+    def create_model(self, neurons: int):
         self.chore_part = nn.Sequential(
             nn.Linear(DIM_INPUT, neurons),
             nn.LayerNorm(neurons),
@@ -90,7 +93,7 @@ class NNet(nn.Module):
             nn.Linear(128, C.NUMBER_OF_POSSIBLE_STATES)
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         if x.dim() == 1:  # If input is 1D, reshape to 2D by adding batch dimension
             x = x.unsqueeze(0)
     

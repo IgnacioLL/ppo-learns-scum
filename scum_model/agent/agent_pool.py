@@ -5,6 +5,7 @@ from agent.a2c_agent import A2CAgent
 from typing import List
 import numpy as np
 from config.constants import Constants as C
+from utils import data_utils
 
 class AgentPool:
     def __init__(self, num_agents: int, **kwargs):
@@ -56,7 +57,6 @@ class AgentPool:
     def get_better_model(self):
         return self.get_agent(self.order[0])
 
-
     def swap_worst_models_for_best_ones(self, average_rewards: List[float], tol=0.1) -> None:
         self.update_order(average_rewards)
         self.save_agents()
@@ -81,10 +81,9 @@ class AgentPool:
         if (self.best_reward - self.worst_reward) > tol:
             self.agents[worst_agent].model.load_state_dict(self.previous_agents[best_agent].model.state_dict())
 
-    def apply_discounted_returns_in_agents_buffer(self, episode_rewards):
+    def apply_discounted_returns_in_agents_buffer(self, episode_rewards, discount):
         for agent_number, agent_rewards in enumerate(episode_rewards):
-            agent = self.get_agent(agent_number)
-            agent.apply_discounted_returns_in_buffer(agent_rewards)
+            self.agents[agent_number].buffer.apply_discounted_returns_in_buffer(agent_rewards, discount)
 
     
     def save_models(self, episode):
@@ -92,4 +91,9 @@ class AgentPool:
             if self.agents[agent_number].training:
                 self.agents[agent_number].save_model(f"{C.MODELS_PATH}/model_{str(episode)}.pt")
 
+
+    def flush_agents_buffers(self, episode: int):
+        for agent_number in range(self.number_of_agents):
+            os.makedirs("./analytics/data/", exist_ok=True)
+            self.agents[agent_number].buffer.flush_buffer(f"./analytics/data/agent_{agent_number}_buffer_episode_{episode}.parquet")
         

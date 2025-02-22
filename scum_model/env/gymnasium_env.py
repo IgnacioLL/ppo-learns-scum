@@ -13,7 +13,11 @@ from typing import List, Tuple
 from math import ceil
 import random
 import collections
-from utils.utils import move_to_last_position, convert_to_binary_tensor, compact_form_of_states
+
+from utils.utils import move_to_last_position, convert_to_binary_tensor
+from utils import data_utils
+
+from agent.agent_pool import AgentPool
 
 class ScumEnv(gym.Env):
     def __init__(self, number_players):
@@ -49,6 +53,35 @@ class ScumEnv(gym.Env):
         self.done = False
 
         self.winner_player = None
+
+    def run_episode(self, agent_pool: AgentPool, discount: float):
+        done_agents = [False] * C.NUMBER_OF_AGENTS
+        episode_rewards = [0] * C.NUMBER_OF_AGENTS
+        all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
+        self.reset()
+
+        while self.not_all_agents_done(agent_pool.number_of_agents, done_agents):
+            agent = agent_pool.get_agent(self.player_turn)
+            state = self.get_state()
+            action_space = self.get_action_space()
+            action, log_prob = agent.decide_move(state, action_space)
+            current_state, reward, done, agent_number = self.step(action, state)
+
+            done_agents[agent_number] = done
+            episode_rewards[agent_number] += reward
+            all_rewards[agent_number].append(reward)
+
+            agent.buffer.save_in_buffer(current_state, reward, action_space, action, log_prob)
+
+        win = self.get_winner_player() == agent_pool.get_which_agent_training()
+        agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
+
+        return episode_rewards, win
+    
+    @staticmethod
+    def not_all_agents_done(number_of_agents: int, done_agents: List[bool]) -> bool:
+        return np.array(done_agents).sum() != number_of_agents
+
 
     def reset(self) -> None:
         self.__init__(self.number_players)
@@ -201,7 +234,7 @@ class ScumEnv(gym.Env):
         players_info = move_to_last_position(players_info, self.player_turn)
         cards_thrown = self.get_cards_thrown()
 
-        compact_action_space = compact_form_of_states(self.get_action_space())
+        compact_action_space = data_utils.compact_form_of_states(self.get_action_space())
 
         state = torch.cat([cards, compact_action_space.to(C.DEVICE), torch.tensor(players_info, device=C.DEVICE), torch.tensor(cards_thrown, device=C.DEVICE)])
         del cards, compact_action_space, players_info, cards_thrown

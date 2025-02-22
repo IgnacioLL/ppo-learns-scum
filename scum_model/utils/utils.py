@@ -54,16 +54,6 @@ def move_to_last_position(list: List, position: int) -> List:
 
     return list_to_change
 
-def compact_form_of_states(states: torch.tensor) -> torch.tensor:
-    cards = states[:C.NUMBER_OF_POSSIBLE_STATES - 1]
-    cards_matrix = cards.view(4, 14)
-    compact_cards = cards_matrix.sum(dim=0)/C.NUMBER_OF_SUITS
-
-    compact_cards[C.NUMBER_OF_CARDS_PER_SUIT] = torch.where(compact_cards[C.NUMBER_OF_CARDS_PER_SUIT] > 0, 1, 0)
-    compact_state = torch.cat((compact_cards,states[(C.NUMBER_OF_POSSIBLE_STATES - 1):]))
-
-    return compact_state
-
 
 def shuffle_list(input_list):
     "Randomly reorders the elements in a list."

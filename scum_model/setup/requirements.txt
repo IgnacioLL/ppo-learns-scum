@@ -3,3 +3,4 @@ torch
 boto3
 optuna
 stable-baselines3
+pyarrow
