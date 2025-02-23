@@ -19,9 +19,9 @@ from utils import logging
 
 
 class A2CScum:
-    def __init__(self, number_of_agents, agent_pool: AgentPool=None, callback=None, **kwargs):
+    def __init__(self, number_of_agents, agent_pool: AgentPool=None, callback=None, load_path=None, **kwargs):
         self.env = ScumEnv(number_players=number_of_agents)
-        self.agent_pool = AgentPool(number_of_agents, **kwargs) if agent_pool is None else agent_pool
+        self.agent_pool = AgentPool(number_of_agents, load_path, **kwargs) if agent_pool is None else agent_pool
         self.total_steps = 0
         self.ep_rewards = []
         self.wins = []
@@ -50,7 +50,7 @@ class A2CScum:
             if episode % self.assess_model == 0:
                 win_rate = self.get_win_rate_last_n_episodes()
                 logging.flush_average_win_rate_to_tensorboard(self.writer, win_rate, episode)
-                if win_rate > .35:
+                if win_rate > .6:
                     self.agent_pool.refresh_agents_with_previous_executions()
 
             if episode % self.aggregate_stats_every == 0:

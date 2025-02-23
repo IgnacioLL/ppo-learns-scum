@@ -48,7 +48,6 @@ class NNet(nn.Module):
         elif model == "small":
             self.create_small_model(neurons=64)
         
-        self.softmax = nn.Softmax(dim=-1)
         self.apply(hu_initialization)
 
     def create_model(self, neurons: int):
@@ -99,6 +98,6 @@ class NNet(nn.Module):
     
         x = self.chore_part(x)
         value = self.value_estimate(x)
-        action_probs = self.softmax(self.policy_probability(x))
+        action_logits = self.policy_probability(x)
 
-        return value, action_probs
+        return value, action_logits

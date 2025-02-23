@@ -90,13 +90,18 @@ def log_ram_memory(tag=""):
     print(f"  System Usage: {system_used_mb:.0f}MB / {system_total_mb:.0f}MB ({system_used_percent}%)")
 
 
-def take_second_highest_tensor(tensor: torch.Tensor) -> float:
-    sorted_vals, _ = torch.sort(tensor.flatten(), descending=True)
-    return sorted_vals[1].item()
+def take_n_highest_tensor(tensor: torch.Tensor, position: int=2) -> float:
+    "Starts in 1"
+    sorted_vals, _ = torch.sort(tensor, dim=1, descending=True)
+    return sorted_vals[:, position-1].mean().item()
 
-def take_third_highest_tensor(tensor: torch.Tensor) -> float:
-    sorted_vals, _ = torch.sort(tensor.flatten(), descending=True)
-    return sorted_vals[2].item()
+
+def take_median_tensor(tensor: torch.Tensor, position: int=2) -> float:
+    sorted_vals, _ = torch.sort(tensor, dim=1, descending=True)
+    return sorted_vals[:, position-1].mean().item()
+
+
+
 
 if __name__ == "__main__":
     upload_to_s3()

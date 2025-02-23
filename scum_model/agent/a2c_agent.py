@@ -13,19 +13,20 @@ from torch.optim import Adam
 from config.constants import Constants as C
 
 import numpy as np
+import pandas as pd
 
 import torch.nn as nn
 
 from nnet.nnet import NNet
 
 from utils import data_utils, logging, loss_utils, utils
-from utils.ml_utils import WarmupLRScheduler
+from utils.ml_utils import CoolerLRScheduler
 from buffer.buffer import Buffer
 
 from typing import Union
 
 class A2CAgent:
-    def __init__(self, training: bool=False, learning_rate: float = 1e-4, discount: float = None, number_players: int = C.NUMBER_OF_AGENTS, path: str = None, model="big", model_id=None, entropy_coef=0, policy_error_coef=1, value_error_coef=1, epochs=C.N_EPOCH_PER_STEP):
+    def __init__(self, training: bool=False, learning_rate: float = 1e-5, discount: float = None, number_players: int = C.NUMBER_OF_AGENTS, path: str = None, model="big", model_id=None, entropy_coef=0, policy_error_coef=1, value_error_coef=1, epochs=C.N_EPOCH_PER_STEP):
         self.model = NNet(number_of_players=number_players, model=model, id=model_id).to(C.DEVICE)
         if path:
             self.model.load_state_dict(torch.load(path, weights_only=False))
@@ -36,9 +37,9 @@ class A2CAgent:
         self.discount = discount if discount else C.DISCOUNT
 
         self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
-        self.scheduler = WarmupLRScheduler(
+        self.scheduler = CoolerLRScheduler(
             self.optimizer,
-            warmup_steps=C.WARMUP_STEPS,
+            cooler_steps=C.COOLER_STEPS,
             initial_lr=learning_rate*C.INITIAL_LR_FACTOR,
             target_lr=learning_rate
         )
@@ -64,11 +65,11 @@ class A2CAgent:
             prediction = self.predict(compact_state)
 
             action_space = action_space.unsqueeze(0)
-            masked_predictions= data_utils.mask_impossible_actions(action_space, prediction)
-            masked_predictions_norm = F.softmax(masked_predictions, dim=-1)
+            masked_predictions = data_utils.mask_impossible_actions(action_space, prediction)
+            masked_predictions_prob = F.softmax(masked_predictions, dim=-1)
             logging.log_current_state_and_prediction(state, prediction)
 
-            prediction_masked = Categorical(masked_predictions_norm)
+            prediction_masked = Categorical(masked_predictions_prob)
             action = prediction_masked.sample()
             
             log_prob = prediction_masked.log_prob(action)
@@ -103,6 +104,8 @@ class A2CAgent:
         value_preds, policy_logits = self.model.forward(batch_states)
         probs = F.softmax(policy_logits, dim=-1)
         value_preds = value_preds.squeeze()
+
+        pd.DataFrame(policy_logits.clone().detach().cpu().numpy()).to_parquet("./analytics/data/policy_logits.parquet")
 
         masked_policy_logits = data_utils.mask_impossible_actions(batch_action_space, policy_logits)
         masked_policy_probs = F.softmax(masked_policy_logits, dim=-1)
@@ -158,11 +161,11 @@ class A2CAgent:
             'advantadge': advantadge.mean().item(), 
             'advantadge_normalized': advantadge_norm.mean().item(),
             "learning_rate": self.scheduler.get_current_learning_rate(),
-            'prob_max': probs.max().item(),
-            'prob_2nd': utils.take_second_highest_tensor(probs),
-            'prob_3rd': utils.take_third_highest_tensor(probs),
-            'prob_median': probs.median().item(),
-            'prob_min': probs.min().item(),
+            'prob_max': probs.max(dim=1)[0].mean().item(),
+            'prob_2nd': utils.take_n_highest_tensor(probs, 2),
+            'prob_3rd': utils.take_n_highest_tensor(probs, 3),
+            'prob_median': probs.median(dim=1)[0].mean().item(),
+            'prob_min': probs.min(dim=1)[0].mean().item(),
         }
 
 
