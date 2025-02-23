@@ -89,5 +89,14 @@ def log_ram_memory(tag=""):
     print(f"  Process VMS: {vms_mb:.2f}MB (virtual memory allocated)")
     print(f"  System Usage: {system_used_mb:.0f}MB / {system_total_mb:.0f}MB ({system_used_percent}%)")
 
+
+def take_second_highest_tensor(tensor: torch.Tensor) -> float:
+    sorted_vals, _ = torch.sort(tensor.flatten(), descending=True)
+    return sorted_vals[1].item()
+
+def take_third_highest_tensor(tensor: torch.Tensor) -> float:
+    sorted_vals, _ = torch.sort(tensor.flatten(), descending=True)
+    return sorted_vals[2].item()
+
 if __name__ == "__main__":
     upload_to_s3()

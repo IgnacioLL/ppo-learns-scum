@@ -7,38 +7,45 @@ from torch.utils.tensorboard import SummaryWriter
 
 def initialize_metrics():
     return {
-        'value_loss': 0,
-        'policy_loss': 0,
-        'entropy': 0,
-        'total_loss': 0,
-        'value_prediction_avg': 0,
-        'returns': 0,
-        'ratio': 0,
-        'mean_gradient': 0,
-        'median_gradient': 0,
-        'max_gradient': 0,
-        'min_gradient': 0,
-        'p99_gradient': 0,
-        'p01_gradient': 0,
-        'advantadge': 0,
-        'advantadge_normalized': 0,
-        'learning_rate': 0,
-        "variance_in_logits": 0,
-        'mean_change_ratio': 0, 
-        'max_change_ratio': 0, 
-        'std_change_ratio': 0, 
-        'max_prob': 0
+        'loss_value': {'total': 0, 'count': 0},
+        'loss_policy': {'total': 0, 'count': 0},
+        'loss_entropy': {'total': 0, 'count': 0},
+        'loss_total': {'total': 0, 'count': 0},
+        'value_prediction_avg': {'total': 0, 'count': 0},
+        'returns': {'total': 0, 'count': 0},
+        'ratio': {'total': 0, 'count': 0},
+        'ratio_abs': {'total': 0, 'count': 0},
+        'ratio_5th_epoch': {'total': 0, 'count': 0},
+        'ratio_7th_epoch': {'total': 0, 'count': 0},
+        'ratio_10th_epoch': {'total': 0, 'count': 0},
+        'ratio_max_change': {'total': 0, 'count': 0},
+        'ratio_min_change': {'total': 0, 'count': 0},
+        'mean_gradient': {'total': 0, 'count': 0},
+        'median_gradient': {'total': 0, 'count': 0},
+        'max_gradient': {'total': 0, 'count': 0},
+        'min_gradient': {'total': 0, 'count': 0},
+        'p99_gradient': {'total': 0, 'count': 0},
+        'p01_gradient': {'total': 0, 'count': 0},
+        'advantadge': {'total': 0, 'count': 0},
+        'advantadge_normalized': {'total': 0, 'count': 0},
+        'learning_rate': {'total': 0, 'count': 0},
+        "prob_max": {'total': 0, 'count': 0},
+        'prob_2nd': {'total': 0, 'count': 0},
+        'prob_3rd': {'total': 0, 'count': 0},
+        'prob_median': {'total': 0, 'count': 0},
+        'prob_min': {'total': 0, 'count': 0},
     }
 
 
 def accumulate_metrics(total_metrics, batch_metrics):
     for key in total_metrics:
-        total_metrics[key] += batch_metrics[key]
+        if batch_metrics[key] is not None:
+            total_metrics[key]['total'] += batch_metrics[key]
+            total_metrics[key]['count'] += 1
 
 
-def average_metrics(metrics, total_samples, batch_size):
-    num_batches = (total_samples + batch_size - 1) // batch_size
-    return {key: value / num_batches for key, value in metrics.items()}
+def average_metrics(metrics):
+    return {key: value['total']/value['count'] for key, value in metrics.items()}
 
 
 def get_gradient_stats(model):

@@ -18,7 +18,7 @@ import torch.nn as nn
 
 from nnet.nnet import NNet
 
-from utils import data_utils, logging, loss_utils
+from utils import data_utils, logging, loss_utils, utils
 from utils.ml_utils import WarmupLRScheduler
 from buffer.buffer import Buffer
 
@@ -95,12 +95,13 @@ class A2CAgent:
                 batch_metrics = self.train_on_batch(batch_data)
                 logging.accumulate_metrics(metrics, batch_metrics)
         
-        return logging.average_metrics(metrics, len(data[0])*self.epochs, batch_size)
+        return logging.average_metrics(metrics)
 
 
     def train_on_batch(self, batch_data):
         batch_states, batch_returns, batch_action_space, batch_action, batch_old_log_prob = batch_data
         value_preds, policy_logits = self.model.forward(batch_states)
+        probs = F.softmax(policy_logits, dim=-1)
         value_preds = value_preds.squeeze()
 
         masked_policy_logits = data_utils.mask_impossible_actions(batch_action_space, policy_logits)
@@ -124,7 +125,8 @@ class A2CAgent:
 
         total_loss = (
             self.policy_error_coef * policy_loss +
-            self.value_error_coef * value_loss
+            self.value_error_coef * value_loss +
+            self.entropy_coef * entropy
         )
 
         self.optimizer.zero_grad()
@@ -134,23 +136,33 @@ class A2CAgent:
         self.optimizer.step()
         self.scheduler.step()
 
+        ratio_5th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 5 else None
+        ratio_7th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 6 else None
+        ratio_10th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 9 else None
+
         return {
-            'value_loss': value_loss.item() * self.value_error_coef,
-            'policy_loss': policy_loss.item() * self.policy_error_coef,
-            'entropy': entropy.mean().item() * self.entropy_coef,
-            'total_loss': total_loss.item(),
+            'loss_value': value_loss.item() * self.value_error_coef,
+            'loss_policy': policy_loss.item() * self.policy_error_coef,
+            'loss_entropy': entropy.mean().item() * self.entropy_coef,
+            'loss_total': total_loss.item(),
             'value_prediction_avg': value_preds.squeeze().mean().item(),
             'returns': batch_returns.mean().item(),
-            'ratio': torch.abs(ratio - 1).mean().item(),
+            'ratio': (ratio - 1).mean().item(),
+            'ratio_abs': torch.abs(ratio - 1).mean().item(),
+            'ratio_5th_epoch': ratio_5th_epoch,
+            'ratio_7th_epoch': ratio_7th_epoch,
+            'ratio_10th_epoch': ratio_10th_epoch,
+            'ratio_max_change': (ratio - 1).max().item(), 
+            'ratio_min_change': (ratio - 1).min().item(), 
             **gradient_stats,
             'advantadge': advantadge.mean().item(), 
             'advantadge_normalized': advantadge_norm.mean().item(),
             "learning_rate": self.scheduler.get_current_learning_rate(),
-            'variance_in_logits': policy_logits.std().item(),
-            'mean_change_ratio': ratio.mean().item(), 
-            'max_change_ratio': ratio.max().item(), 
-            'std_change_ratio': ratio.std().item(), 
-            'max_prob': masked_policy_probs.max().item()
+            'prob_max': probs.max().item(),
+            'prob_2nd': utils.take_second_highest_tensor(probs),
+            'prob_3rd': utils.take_third_highest_tensor(probs),
+            'prob_median': probs.median().item(),
+            'prob_min': probs.min().item(),
         }
 
 

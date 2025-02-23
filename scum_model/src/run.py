@@ -13,7 +13,7 @@ DEFAULT_HYPERPARAMS = {
     "model":"large", 
     "policy_error_coef": 1,
     "value_error_coef": 1, # The advantadge is of low magnitude
-    "entropy_coef": 0
+    "entropy_coef": 0.05
 }
 
 

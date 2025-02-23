@@ -50,7 +50,7 @@ class A2CScum:
             if episode % self.assess_model == 0:
                 win_rate = self.get_win_rate_last_n_episodes()
                 logging.flush_average_win_rate_to_tensorboard(self.writer, win_rate, episode)
-                if win_rate > .5:
+                if win_rate > .35:
                     self.agent_pool.refresh_agents_with_previous_executions()
 
             if episode % self.aggregate_stats_every == 0:
