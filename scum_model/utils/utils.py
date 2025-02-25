@@ -55,7 +55,7 @@ def move_to_last_position(list: List, position: int) -> List:
     return list_to_change
 
 
-def shuffle_list(input_list):
+def shuffle_list(input_list: List) -> List:
     "Randomly reorders the elements in a list."
     shuffled = input_list.copy()
     random.shuffle(shuffled)

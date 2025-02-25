@@ -6,6 +6,8 @@ from typing import List
 import numpy as np
 from config.constants import Constants as C
 
+from utils import utils
+
 class AgentPool:
     def __init__(self, num_agents: int, load_path: str=None, **kwargs):
         self.number_of_agents = num_agents
@@ -15,7 +17,11 @@ class AgentPool:
         self.previous_agents = self.agents.copy()
         self.best_reward = 0
         self.worst_reward = 0
+        self.kwargs = kwargs
 
+
+    def randomize_order(self):
+        self.agents = utils.shuffle_list(self.agents)
 
     def get_which_agent_training(self):
         for agent_number in range(self.number_of_agents):
@@ -23,19 +29,22 @@ class AgentPool:
                 return agent_number
 
 
-    def refresh_agents_with_previous_executions(self, **kwargs) -> List[A2CAgent]:
+    def refresh_agents_with_previous_executions(self) -> List[A2CAgent]:
         files = os.listdir(f"{C.MODELS_PATH}")
         executed_episodes = [int(file.split("_")[1][:-3]) for file in files]
         executed_episodes.sort()
         executed_episodes = executed_episodes[-(self.number_of_agents-1):]
         
-        if executed_episodes >= (self.number_of_agents - 1):
-            for agent_number, episode in zip(range(1, self.number_of_agents), executed_episodes):
-                path = f"{C.MODELS_PATH}/model_{str(episode)}.pt"
-                self.agents[agent_number] = A2CAgent(number_players=self.number_of_agents, path=path, **kwargs)
+        if len(executed_episodes) >= (self.number_of_agents - 1):
+            for agent_number, episode in zip(range(self.number_of_agents), executed_episodes):
+                if self.agents[agent_number].training==False:
+                    path = f"{C.MODELS_PATH}/model_{str(episode)}.pt"
+                    self.agents[agent_number] = A2CAgent(number_players=self.number_of_agents, path=path, **self.kwargs)
         else:
             for agent_number, episode in zip(range(1, self.number_of_agents), executed_episodes):
-                self.agents[agent_number] = A2CAgent(number_players=self.number_of_agents, path=None, **kwargs)
+                if self.agents[agent_number].training==False:
+                    self.agents[agent_number] = A2CAgent(number_players=self.number_of_agents, path=None, **self.kwargs)
+
 
     def _create_agents(self, path=None, **kwargs) -> List[A2CAgent]:
         training_agent = A2CAgent(number_players=self.number_of_agents, path=path, **kwargs)

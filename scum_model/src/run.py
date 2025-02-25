@@ -10,8 +10,7 @@ from config.constants import Constants as C
 DEFAULT_HYPERPARAMS = {
     "number_of_agents": 5,
     "learning_rate": 1e-5,
-    "load_path": "./models/model_8000.pt",
-    "model":"large", 
+    "model": "large", 
     "policy_error_coef": 1,
     "value_error_coef": 1, # The advantadge is of low magnitude
     "entropy_coef": 0.05

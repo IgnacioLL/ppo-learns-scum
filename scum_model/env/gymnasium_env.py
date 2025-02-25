@@ -237,7 +237,6 @@ class ScumEnv(gym.Env):
         compact_action_space = data_utils.compact_form_of_states(self.get_action_space())
 
         state = torch.cat([cards, compact_action_space.to(C.DEVICE), torch.tensor(players_info, device=C.DEVICE), torch.tensor(cards_thrown, device=C.DEVICE)])
-        del cards, compact_action_space, players_info, cards_thrown
         return state.detach()
 
     def get_action_space(self) -> torch.Tensor:

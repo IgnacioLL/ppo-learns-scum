@@ -34,23 +34,21 @@ class A2CScum:
         self.writer = SummaryWriter()
     
     def learn(self, total_episodes):
-        for episode in tqdm(range(1, total_episodes + 1), ascii=True, unit='episodes'):
+        for episode in tqdm(range(1, total_episodes + 1), ascii=True, unit=' episode'):
+            self.agent_pool.randomize_order()
             episode_rewards, win = self.env.run_episode(self.agent_pool, self.discount)
 
             self.append_rewards_to_historic_record(episode_rewards)
             self.append_win_to_historic_record(win)
 
-            if episode == 100:
-                self.agent_pool.flush_agents_buffers(episode)
-
             if episode % self.train_models_every == 0:
                 training_performance_stats = self.train_models()
                 logging.flush_performance_stats_tensorboard(self.writer, training_performance_stats, episode)
 
-            if episode % self.assess_model == 0:
+            if (episode % self.assess_model == 0) | (episode == 1_000):
                 win_rate = self.get_win_rate_last_n_episodes()
                 logging.flush_average_win_rate_to_tensorboard(self.writer, win_rate, episode)
-                if win_rate > .6:
+                if win_rate > .3:
                     self.agent_pool.refresh_agents_with_previous_executions()
 
             if episode % self.aggregate_stats_every == 0:

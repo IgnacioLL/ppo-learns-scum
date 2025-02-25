@@ -44,15 +44,13 @@ DEFAULT_HYPERPARAMS = {
 
 def sample_a2c_params(trial: optuna.Trial) -> Dict[str, Any]:
     """Sampler for A2C hyperparameters."""
-    learning_rate = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
-    policy_error_coef = trial.suggest_float("policy_error_coef", 0, 0.5, log=False)
-    entropy_coef = trial.suggest_float("entropy_coef", 1e-2, 100, log=True)
-    model = trial.suggest_categorical("model", ["small", "medium", "big"])
+    learning_rate = trial.suggest_float("lr", 1e-6, 1e-3, log=True)
+    entropy_coef = trial.suggest_float("entropy_coef", 1e-4, 1e-1, log=True)
+    model = trial.suggest_categorical("model", ["small", "medium", "big", "large"])
 
     return {
         "learning_rate": learning_rate,
         "model": model,
-        "policy_error_coef": policy_error_coef,
         "entropy_coef": entropy_coef
     }
 
@@ -96,10 +94,8 @@ def objective(trial: optuna.Trial, episodes=C.EPISODES) -> float:
 
     print("Learning rate is: ", kwargs['learning_rate'])
     print("Model is: ", kwargs['model'])
-    print("Policy error coefficient is: ", kwargs['policy_error_coef'])
     print("Entropy coefficient is: ", kwargs['entropy_coef'])
     
-
     try:
         A2CScum(**kwargs, callback=eval_callback).learn(total_episodes=episodes)
     except AssertionError as e:
@@ -122,7 +118,6 @@ if __name__ == "__main__":
     torch.set_num_threads(1)
 
     sampler = TPESampler(n_startup_trials=N_STARTUP_TRIALS)
-    # Do not prune before 1/3 of the max budget is used.
     pruner = MedianPruner(n_startup_trials=N_STARTUP_TRIALS, n_warmup_steps=N_EVALUATIONS // 3)
 
     study = optuna.create_study(sampler=sampler, pruner=pruner, direction="maximize")
