@@ -139,9 +139,7 @@ class A2CAgent:
         self.optimizer.step()
         self.scheduler.step()
 
-        ratio_5th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 5 else None
-        ratio_7th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 6 else None
-        ratio_10th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 9 else None
+        ratio_5th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 4 else None
 
         return {
             'loss_value': value_loss.item() * self.value_error_coef,
@@ -153,8 +151,6 @@ class A2CAgent:
             'ratio': (ratio - 1).mean().item(),
             'ratio_abs': torch.abs(ratio - 1).mean().item(),
             'ratio_5th_epoch': ratio_5th_epoch,
-            'ratio_7th_epoch': ratio_7th_epoch,
-            'ratio_10th_epoch': ratio_10th_epoch,
             'ratio_max_change': (ratio - 1).max().item(), 
             'ratio_min_change': (ratio - 1).min().item(), 
             **gradient_stats,

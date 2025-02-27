@@ -73,10 +73,9 @@ class ScumEnv(gym.Env):
 
             agent.buffer.save_in_buffer(current_state, reward, action_space, action, log_prob)
 
-        win = self.get_winner_player() == agent_pool.get_which_agent_training()
         agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
 
-        return episode_rewards, win
+        return episode_rewards, self.get_winner_player()
     
     @staticmethod
     def not_all_agents_done(number_of_agents: int, done_agents: List[bool]) -> bool:

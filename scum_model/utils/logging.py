@@ -16,8 +16,6 @@ def initialize_metrics():
         'ratio': {'total': 0, 'count': 0},
         'ratio_abs': {'total': 0, 'count': 0},
         'ratio_5th_epoch': {'total': 0, 'count': 0},
-        'ratio_7th_epoch': {'total': 0, 'count': 0},
-        'ratio_10th_epoch': {'total': 0, 'count': 0},
         'ratio_max_change': {'total': 0, 'count': 0},
         'ratio_min_change': {'total': 0, 'count': 0},
         'mean_gradient': {'total': 0, 'count': 0},

@@ -19,7 +19,7 @@ from utils import logging
 
 
 class A2CScum:
-    def __init__(self, number_of_agents, agent_pool: AgentPool=None, callback=None, load_path=None, **kwargs):
+    def __init__(self, number_of_agents, agent_pool: AgentPool=None, callback=None, load_path=None, comment=None, **kwargs):
         self.env = ScumEnv(number_players=number_of_agents)
         self.agent_pool = AgentPool(number_of_agents, load_path, **kwargs) if agent_pool is None else agent_pool
         self.total_steps = 0
@@ -31,12 +31,13 @@ class A2CScum:
         self.assess_model = C.ASSESS_MODEL
         self.discount = C.DISCOUNT
         self.callback = callback
-        self.writer = SummaryWriter()
+        self.writer = SummaryWriter(comment=comment)
     
     def learn(self, total_episodes):
         for episode in tqdm(range(1, total_episodes + 1), ascii=True, unit=' episode'):
             self.agent_pool.randomize_order()
-            episode_rewards, win = self.env.run_episode(self.agent_pool, self.discount)
+            episode_rewards, winner_player = self.env.run_episode(self.agent_pool, self.discount)
+            win = winner_player == self.agent_pool.get_which_agent_training()
 
             self.append_rewards_to_historic_record(episode_rewards)
             self.append_win_to_historic_record(win)

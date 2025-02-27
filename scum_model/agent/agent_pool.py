@@ -30,6 +30,7 @@ class AgentPool:
 
 
     def refresh_agents_with_previous_executions(self) -> List[A2CAgent]:
+        os.makedirs(C.MODELS_PATH, exist_ok=True)
         files = os.listdir(f"{C.MODELS_PATH}")
         executed_episodes = [int(file.split("_")[1][:-3]) for file in files]
         executed_episodes.sort()
@@ -54,6 +55,12 @@ class AgentPool:
             agent = A2CAgent(number_players=self.number_of_agents, **kwargs)
             agents.append(agent)
         return agents
+    
+    def create_agents_with_paths(self, paths: List[str], models: List[str], **kwargs):
+        self.agents = [A2CAgent(number_players=self.number_of_agents, path=path, model=model, **kwargs) 
+                       for model, path in zip(models, paths)]
+        return self
+
 
     def get_agent(self, agent_number: int) -> A2CAgent:
         return self.agents[agent_number]

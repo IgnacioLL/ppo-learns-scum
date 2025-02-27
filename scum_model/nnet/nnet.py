@@ -35,10 +35,13 @@ class NNet(nn.Module):
         self.number_of_players = number_of_players
         self.size = model
         self.id = str(uuid.uuid4()) if id is None else id
-
+        self.chore_part = False if model == 'large_sep_arch' else True
+        if model == "large_sep_arch":
+            self.create_separate_arch_model(neurons=1024)
+        
         if model == "large":
             self.create_model(neurons=1024)
-
+        
         if model == "big":
             self.create_model(neurons=256)
 
@@ -49,6 +52,36 @@ class NNet(nn.Module):
             self.create_small_model(neurons=64)
         
         self.apply(hu_initialization)
+
+    def create_separate_arch_model(self, neurons: int):
+        self.value_estimate = nn.Sequential(
+            nn.Linear(DIM_INPUT, neurons),
+            nn.LayerNorm(neurons),
+            nn.LeakyReLU(),
+            nn.Linear(neurons, neurons*2),
+            nn.LayerNorm(neurons*2),
+            nn.LeakyReLU(),
+            nn.Linear(neurons*2, neurons),
+            nn.LayerNorm(neurons),
+            nn.LeakyReLU(), 
+            nn.Linear(neurons, neurons//4),
+            nn.LeakyReLU(), 
+            nn.Linear(neurons//4, 1)
+        )
+        
+        self.policy_probability = nn.Sequential(
+            nn.Linear(DIM_INPUT, neurons),
+            nn.LayerNorm(neurons),
+            nn.LeakyReLU(),
+            nn.Linear(neurons, neurons*2),
+            nn.LayerNorm(neurons*2),
+            nn.LeakyReLU(),
+            nn.Linear(neurons*2, neurons),
+            nn.LayerNorm(neurons),
+            nn.LeakyReLU(), 
+            nn.Linear(neurons, C.NUMBER_OF_POSSIBLE_STATES)
+        )
+
 
     def create_model(self, neurons: int):
         self.chore_part = nn.Sequential(
@@ -95,8 +128,9 @@ class NNet(nn.Module):
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         if x.dim() == 1:  # If input is 1D, reshape to 2D by adding batch dimension
             x = x.unsqueeze(0)
-    
-        x = self.chore_part(x)
+
+        if self.chore_part:
+            x = self.chore_part(x)
         value = self.value_estimate(x)
         action_logits = self.policy_probability(x)
 
