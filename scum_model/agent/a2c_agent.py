@@ -9,6 +9,7 @@ import torch.nn as nn
 from torch.distributions import Categorical
 from torch.nn import functional as F
 from torch.optim import Adam
+from torch.utils.tensorboard import SummaryWriter
 
 from config.constants import Constants as C
 
@@ -19,23 +20,43 @@ import torch.nn as nn
 
 from nnet.nnet import NNet
 
-from utils import data_utils, logging, loss_utils, utils
+from utils import data_utils, logging, loss_utils, utils, env_utils
 from utils.ml_utils import CoolerLRScheduler
 from buffer.buffer import Buffer
 
 from typing import Union
 
 class A2CAgent:
-    def __init__(self, training: bool=False, learning_rate: float = 1e-5, discount: float = None, number_players: int = C.NUMBER_OF_AGENTS, path: str = None, model="big", model_id=None, entropy_coef=0, policy_error_coef=1, value_error_coef=1, epochs=C.N_EPOCH_PER_STEP):
-        self.model = NNet(number_of_players=number_players, model=model, id=model_id).to(C.DEVICE)
-        if path:
-            self.model.load_state_dict(torch.load(path, weights_only=False))
+    def __init__(
+            self,
+            model_id, 
+            model_size,
+            model_tag,
+            training: bool=False,
+            playing: bool=False,
+            learning_rate: float = 1e-5, 
+            discount: float = C.DISCOUNT, 
+            number_players: int = C.NUMBER_OF_AGENTS, 
+            load_model_path: str = None, 
+            value_error_coef=1, 
+            policy_error_coef=1, 
+            entropy_coef=0, 
+            epochs=C.N_EPOCH_PER_STEP,
+            current_episode=0
+            ):
+        
+        self.model_id = model_id
+        self.model_tag = model_tag
+        self.model_size = model_size
+        self.current_episode = current_episode
+        self.model = NNet(number_of_players=number_players, model=model_size, model_id=model_id).to(C.DEVICE)
+        if load_model_path:
+            self.model.load_state_dict(torch.load(load_model_path, weights_only=False))
 
         self.learning_rate = learning_rate
         self.initial_learning_rate = self.learning_rate * C.INITIAL_LR_FACTOR
         self.current_learning_rate = self.initial_learning_rate
-        self.discount = discount if discount else C.DISCOUNT
-
+        self.discount = discount
         self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
         self.scheduler = CoolerLRScheduler(
             self.optimizer,
@@ -43,21 +64,47 @@ class A2CAgent:
             initial_lr=learning_rate*C.INITIAL_LR_FACTOR,
             target_lr=learning_rate
         )
-        self.eps = np.finfo(np.float32).eps.item()
-
         self.policy_error_coef = policy_error_coef
         self.value_error_coef = value_error_coef
         self.entropy_coef = entropy_coef
-        self.epochs = epochs
-        self.training = training
-        self.buffer = Buffer()
 
-        self.episode = None
+        self.epochs = epochs
+        
+        self.training = training
+        self.playing = playing
+        self.buffer = Buffer()
+        if training:
+            self.writer = SummaryWriter(log_dir=f"./runs/{model_id}-{model_tag}")
+
+        self.episode_rewards = []
+        self.wins = []
 
     def set_training(self, set_to_train: bool) -> None:
         self.training = set_to_train
 
+    def set_playing(self, set_to_play: bool) -> None:
+        self.playing = set_to_play
+
     def decide_move(self, state: torch.Tensor, action_space: torch.Tensor) -> Union[int, torch.Tensor]:
+        if self.playing:
+            return self.decide_move_human(state, action_space)
+        else:
+            return self.decide_move_model(state, action_space)
+        
+    def decide_move_human(self, state: torch.Tensor, action_space: torch.Tensor) -> Union[int, torch.Tensor]:
+        action_space = action_space.cpu().detach().numpy()
+        possible_actions = np.where(action_space == 1)[0] + 1
+        print("The possible actions are:\n_______\n")
+        for action in possible_actions:
+            print(f"Action: {action}")
+            env_utils.decode_action(action-1)
+
+        print("Which action to take: ")
+        answer = int(input())
+        return answer, 1
+
+
+    def decide_move_model(self, state: torch.Tensor, action_space: torch.Tensor) -> Union[int, torch.Tensor]:
         if state is None:
             state = data_utils.create_only_pass_state()
         else:
@@ -67,7 +114,6 @@ class A2CAgent:
             action_space = action_space.unsqueeze(0)
             masked_predictions = data_utils.mask_impossible_actions(action_space, prediction)
             masked_predictions_prob = F.softmax(masked_predictions, dim=-1)
-            logging.log_current_state_and_prediction(state, prediction)
 
             prediction_masked = Categorical(masked_predictions_prob)
             action = prediction_masked.sample()
@@ -81,8 +127,7 @@ class A2CAgent:
         return probs.detach().clone()  # Explicitly detach and clone
 
 
-    def train(self, step, batch_size=32):
-        self.step = step
+    def train(self, episode, batch_size=32):
         metrics = logging.initialize_metrics()
         data = self.buffer.load_data_from_buffer()
         self.buffer.clear_buffer()
@@ -96,15 +141,15 @@ class A2CAgent:
                 batch_metrics = self.train_on_batch(batch_data)
                 logging.accumulate_metrics(metrics, batch_metrics)
         
-        return logging.average_metrics(metrics)
-
+        avg_metrics = logging.average_metrics(metrics)
+        logging.flush_performance_stats_tensorboard(self.writer, avg_metrics, episode)
 
     def train_on_batch(self, batch_data):
         batch_states, batch_returns, batch_action_space, batch_action, batch_old_log_prob = batch_data
         value_preds, policy_logits = self.model.forward(batch_states)
         probs = F.softmax(policy_logits, dim=-1)
         value_preds = value_preds.squeeze()
-
+        
         pd.DataFrame(policy_logits.clone().detach().cpu().numpy()).to_parquet("./analytics/data/policy_logits.parquet")
 
         masked_policy_logits = data_utils.mask_impossible_actions(batch_action_space, policy_logits)
@@ -173,3 +218,24 @@ class A2CAgent:
         model = torch.load(path)
         return model
 
+    def append_episode_rewards(self, reward):
+        self.episode_rewards.append(reward)
+    
+    def append_win(self, win):
+        self.wins.append(win)
+
+    def get_average_reward_last_n_episodes(self, n_episodes=C.AGGREGATE_STATS_EVERY) -> float:
+        recent_rewards = self.episode_rewards[-n_episodes:]
+        return sum(recent_rewards) / len(recent_rewards)
+
+    def get_win_rate_last_n_episodes(self, n_episodes=C.AGGREGATE_STATS_EVERY) -> float:
+        wins = self.wins[-n_episodes:].copy()
+        return sum(wins) / len(wins)
+    
+    def flush_average_win_rate_to_tensorboard(self, n_episodes, episode):
+        win_rate = self.get_win_rate_last_n_episodes(n_episodes)
+        logging.flush_average_win_rate_to_tensorboard(self.writer, win_rate, episode)
+
+    def flush_average_reward_to_tensorboard(self, n_episodes, episode):
+        average_reward = self.get_average_reward_last_n_episodes(n_episodes)
+        logging.flush_average_reward_to_tensorboard(self.writer, average_reward, episode)

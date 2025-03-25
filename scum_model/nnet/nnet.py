@@ -30,26 +30,29 @@ def hu_initialization(tensor):
 
 
 class NNet(nn.Module):
-    def __init__(self, number_of_players, model="big", id=None):
+    def __init__(self, number_of_players, model, model_id):
         super().__init__()
         self.number_of_players = number_of_players
         self.size = model
-        self.id = str(uuid.uuid4()) if id is None else id
-        self.chore_part = False if model == 'large_sep_arch' else True
-        if model == "large_sep_arch":
+        self.model_id = model_id
+        self.chore_part = False if str(model).endswith('-sep-arch') else True
+        
+        if model == "large-sep-arch":
             self.create_separate_arch_model(neurons=1024)
-        
-        if model == "large":
+        elif model == "big-sep-arch":
+            self.create_separate_arch_model(neurons=256)
+        elif model == "medium-sep-arch":
+            self.create_separate_arch_model(neurons=128)
+        elif model == "small-sep-arch":
+            self.create_separate_arch_model(neurons=64)
+        elif model == "large":
             self.create_model(neurons=1024)
-        
-        if model == "big":
+        elif model == "big":
             self.create_model(neurons=256)
-
         elif model == "medium":
             self.create_model(neurons=128)
-
-        elif model == "small":
-            self.create_small_model(neurons=64)
+        elif model == 'small':
+            self.create_small_model()
         
         self.apply(hu_initialization)
 

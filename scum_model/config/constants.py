@@ -50,3 +50,10 @@ class Constants:
 
     MODELS_PATH = f"models/"
 
+    N_ITER_AGAINST_ANOTHER_MODEL = 10_000
+    N_ITER_TOTAL = 200_000
+    NUMBER_OF_MODELS_IN_PARALLEL = 30
+
+    NAME_COLLECTION_CHECKPOINTS = "training-models-checkpoints"
+    NAME_COLLECTION_MODELS_PARAMS = "training-models"
+

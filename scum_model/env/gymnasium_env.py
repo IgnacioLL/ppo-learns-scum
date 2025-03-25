@@ -15,7 +15,7 @@ import random
 import collections
 
 from utils.utils import move_to_last_position, convert_to_binary_tensor
-from utils import data_utils
+from utils import data_utils, env_utils
 
 from agent.agent_pool import AgentPool
 
@@ -54,7 +54,7 @@ class ScumEnv(gym.Env):
 
         self.winner_player = None
 
-    def run_episode(self, agent_pool: AgentPool, discount: float):
+    def run_episode(self, agent_pool: AgentPool, discount: float, verbose=False):
         done_agents = [False] * C.NUMBER_OF_AGENTS
         episode_rewards = [0] * C.NUMBER_OF_AGENTS
         all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
@@ -65,6 +65,8 @@ class ScumEnv(gym.Env):
             state = self.get_state()
             action_space = self.get_action_space()
             action, log_prob = agent.decide_move(state, action_space)
+            if verbose:
+                self._print_move(action)
             current_state, reward, done, agent_number = self.step(action, state)
 
             done_agents[agent_number] = done
@@ -328,19 +330,18 @@ class ScumEnv(gym.Env):
         print(f"Players playing are: {players_playing}")
 
     def _print_move(self, action: int) -> None:
-        n_cards = action // (C.NUMBER_OF_CARDS_PER_SUIT+1)
-        card_number = action % (C.NUMBER_OF_CARDS_PER_SUIT+1)
-        
         print("Player to move is: ", self.player_turn)
         print("Last player to play was: ", self.last_player)
-        print(f"Move made: {C.N_CARDS_TO_TEXT[n_cards]} {str(card_number)}")
+        env_utils.decode_action(action)
     
     @staticmethod
-    def _print_model_prediction(prediction: torch.tensor, masked_probabilities: torch.tensor) -> None:
+    def _print_model_prediction(prediction: torch.Tensor, masked_probabilities: torch.Tensor) -> None:
         print("Prediction made by the model is: ", prediction)
         print("Masked probabilities are: ", masked_probabilities)
         print("-"*100)
 
     
-    def get_winner_player(self):
-        return self.winner_player
+    def get_winner_player(self) -> List[int]:
+        winner_player = np.zeros(self.number_players).tolist()
+        winner_player[self.winner_player] = 1
+        return winner_player

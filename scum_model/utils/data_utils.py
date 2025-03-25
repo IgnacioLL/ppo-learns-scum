@@ -32,7 +32,7 @@ def remove_impossible_states(data):
     return states, rewards, action_masks, actions, old_log_probs
 
 
-def create_batches(data, batch_size: int) -> Generator[Tuple[torch.Tensor]]:
+def create_batches(data, batch_size: int):
     states, returns, action_space, actions, old_log_probs = data
     num_batches = (len(states) + batch_size - 1) // batch_size
     for i in range(num_batches):
@@ -63,7 +63,7 @@ def create_only_pass_state(number_players: int) -> torch.Tensor:
     return torch.tensor(generated_data, dtype=torch.float32).to(C.DEVICE)
 
 
-def compact_form_of_states(states: torch.tensor) -> torch.tensor:
+def compact_form_of_states(states: torch.Tensor) -> torch.Tensor:
     cards = states[:C.NUMBER_OF_POSSIBLE_STATES - 1]
     cards_matrix = cards.view(4, 14)
     compact_cards = cards_matrix.sum(dim=0)/C.NUMBER_OF_SUITS

@@ -9,11 +9,11 @@ from config.constants import Constants as C
 
 DEFAULT_HYPERPARAMS = {
     "number_of_agents": 5,
-    "learning_rate": 1e-5,
-    "model": "large", 
+    "learning_rate": 5e-5,
+    "model_size": "large", 
     "policy_error_coef": 1,
     "value_error_coef": 1, # The advantadge is of low magnitude
-    "entropy_coef": 0.2,
+    "entropy_coef": 0.1,
     "comment": "-increased-entr-sep-arch"
 }
 
