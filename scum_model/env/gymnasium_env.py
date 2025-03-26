@@ -59,7 +59,6 @@ class ScumEnv(gym.Env):
         episode_rewards = [0] * C.NUMBER_OF_AGENTS
         all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
         self.reset()
-
         while self.not_all_agents_done(agent_pool.number_of_agents, done_agents):
             agent = agent_pool.get_agent(self.player_turn)
             state = self.get_state()

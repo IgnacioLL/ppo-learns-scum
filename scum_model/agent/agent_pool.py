@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from agent.a2c_agent import A2CAgent
-from typing import List
+from typing import List, Dict, Any
 from config.constants import Constants as C
 from db.db import MongoDBManager
 
@@ -22,6 +22,7 @@ class AgentPool:
 
     def randomize_order(self):
         self.agents = utils.shuffle_list(self.agents)
+        return self
 
     def get_which_agent_training(self):
         for agent_number in range(self.number_of_agents):
@@ -37,7 +38,7 @@ class AgentPool:
             agents.append(agent)
         return agents
     
-    def create_agents_with_paths(self, list_of_params_agent):
+    def create_agents_with_paths(self, list_of_params_agent: List[Dict[str, Any]]):
         self.agents = [A2CAgent(**params) for params in list_of_params_agent]
         return self
 
@@ -62,6 +63,7 @@ class AgentPool:
     def append_win_to_historic_record_to_each_agent(self, wins: List[float]):
         for agent_number, win in enumerate(wins):
             self.get_agent(agent_number).append_win(win)
+        return self
 
     def flush_average_reward_to_tensorboard_from_each_agent(self, n_episodes, episode):
         for agent_number in range(self.number_of_agents):
@@ -72,3 +74,10 @@ class AgentPool:
         for agent_number in range(self.number_of_agents):
             if self.get_agent(agent_number).training:
                 self.get_agent(agent_number).flush_average_win_rate_to_tensorboard(n_episodes, episode)
+
+    def extract_wins_agents(self):
+        agents_wins = {}
+        for agent_number in range(self.number_of_agents):
+            agent = self.get_agent(agent_number)
+            agents_wins[agent.model_id] = sum(agent.wins)
+        return agents_wins

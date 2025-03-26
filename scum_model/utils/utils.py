@@ -101,6 +101,15 @@ def take_median_tensor(tensor: torch.Tensor, position: int=2) -> float:
     return sorted_vals[:, position-1].mean().item()
 
 
+def divide_into_subgroups(elements, k):
+    """
+    Randomly divides a list of elements into K subgroups.
+    """
+    random.shuffle(elements)
+    return [list(group) for group in zip(*[iter(elements)] * (len(elements) // k))] 
+
+
+
 
 
 if __name__ == "__main__":

@@ -13,14 +13,14 @@ from collections import defaultdict
 
 from agent.a2c_agent import A2CAgent
 from agent.agent_pool import AgentPool
-from agent.a2c_scum import A2CScum
+from env.gymnasium_env import ScumEnv
 
 from config.constants import Constants as C
 
 import pickle as pkl
 
 class DynamicEloSystem:
-    def __init__(self, k_factor=32, initial_rating=1500, load_path: Optional[str] = None):
+    def __init__(self, k_factor=32, initial_rating=1500, load_path: Optional[str] = None, agent_params: Dict[str]=None):
         if load_path:
             self._load_system(load_path)
         else:
@@ -36,6 +36,9 @@ class DynamicEloSystem:
             self.active_matches = set()
             self.number_of_models = 0
             self.model_info = {}
+        
+        if agent_params:
+            self.register_agents(agent_params)
 
     def save_system(self, path: str) -> None:
         """
@@ -91,22 +94,22 @@ class DynamicEloSystem:
         self.model_info = system_state['model_info']
 
         
-    def register_agent(self, agent: A2CAgent) -> int:
+    def register_agents(self, agents_params: Dict) -> int:
         """Register a new model in the system"""
-        model_id = agent.model.id
-        if agent not in self.ratings:
-            self.ratings[model_id] = {
-                'rating': self.initial_rating,
-                'matches': 0,
-                'last_match': None,
-                'uncertainty': 1.0
-            }
+        self.agents = []
+        for agent_params in agents_params:
+            model_id = agent_params['model_id']
+            if model_id not in self.ratings:
+                self.ratings[model_id] = {
+                    'rating': self.initial_rating,
+                    'matches': 0,
+                    'last_match': None,
+                    'uncertainty': 1.0
+                }
 
-
-        path = f"{C.MODELS_PATH}/{agent.model.size}_{agent.model.id}.pt"
-        agent.save_model(path=path)
-
-        self.model_info[model_id] = {'path': path, 'size': agent.model.size} 
+            self.agents.append(A2CAgent(**agent_params))
+            self.available_models = agent_params['model_id']
+            
 
     
     def select_matches(self, available_models: List[str], num_matches: int) -> List[tuple]:
@@ -191,7 +194,6 @@ class DynamicEloSystem:
         return 1 / (1 + 10**((rating_b - rating_a) / 400))
     
     def run_dynamic_tournament(self, 
-                             performance_functions: Dict[int, A2CAgent],
                              matches_per_round: Optional[int] = None,
                              total_rounds: int = 16) -> pd.DataFrame:
         """
@@ -202,15 +204,11 @@ class DynamicEloSystem:
             matches_per_round: Number of concurrent matches per round (default: n/2 where n is pool size)
             total_rounds: Total number of tournament rounds
         """
-        if matches_per_round is None:
-            matches_per_round = len(performance_functions) // 2
-        
         results = []
         
         for round_num in range(total_rounds):
             # Select matches for this round
-            available_models = list(performance_functions.keys())
-            matches = self.select_matches(available_models, matches_per_round)
+            matches = self.select_matches(self.available_models, matches_per_round)
             
             # Run matches
             for model_a, model_b in matches:
@@ -227,43 +225,6 @@ class DynamicEloSystem:
             
         return pd.concat(results, ignore_index=True)
     
-    def compare_performance(self, agent1_id: str, agent2_id: str, total_num_episodes: int = 200) -> float:
-        """Compare models"""
-        path_agent1 = self.model_info[agent1_id]['path']
-        path_agent2 = self.model_info[agent2_id]['path']
-
-        size_agent1 = self.model_info[agent1_id]['size']
-        size_agent2 = self.model_info[agent2_id]['size']
-
-
-        agent1 = A2CAgent(model=size_agent1, path=path_agent1, model_id=agent1_id)
-        agent2 = A2CAgent(model=size_agent2, path=path_agent2, model_id=agent2_id)
-
-        scores_agent1 = []
-        scores_agent2 = []
-        agents = [agent1, agent2]
-        for i in range(C.NUMBER_OF_AGENTS):
-            agent_pool = AgentPool(num_agents=C.NUMBER_OF_AGENTS)
-            for a in range(C.NUMBER_OF_AGENTS):
-                for j in range(2):
-                    if i == a:
-                        agent_pool.set_agent(agent=agents[j], agent_number=a)
-                    else:
-                        agent_pool.set_agent(agent=agents[-(j+1)], agent_number=a)
-                    env = A2CScum(number_of_agents=C.NUMBER_OF_AGENTS, agent_pool=agent_pool)
-
-                    for _ in range(total_num_episodes//(C.NUMBER_OF_AGENTS*2)):
-                        episode_rewards = env.run_episode(eval=True)
-                        agent_performance = episode_rewards[i] == np.array(episode_rewards).max()
-                        win = float(agent_performance > 0)
-                        scores_agent1.append(win) if j == 0 else scores_agent2.append(win)
-
-        ## Who won more?
-        print("Score agent 1:", scores_agent1)
-        print("Score agent 2:", scores_agent2)
-        score = np.mean(scores_agent1) / (np.mean(scores_agent2) + np.mean(scores_agent1))
-                    
-        return score
         
     def get_current_rankings(self) -> pd.DataFrame:
         """Get current rankings with additional statistics"""
