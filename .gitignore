@@ -14,3 +14,4 @@ __pycache__/*
 */examples/*
 dist/*
 *.parquet
+*/past_runs/*
