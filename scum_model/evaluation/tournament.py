@@ -20,11 +20,11 @@ class ScumTournament:
 
     def _initialize_leaderboard(self):
         model_list = self.mongodb_manager.find_many(C.NAME_COLLECTION_MODELS_PARAMS)
-        return {model_params['model_id']: 0 for model_params in model_list}
+        return { model_params['model_id']: {'model_tag': model_params['model_tag'], 'wins': 0} for model_params in model_list}
     
     def update_leaderboard(self, latest_round_wins: Dict[str, int]):
         for model_id in latest_round_wins.keys():
-            self.leaderboard[model_id] += latest_round_wins[model_id]
+            self.leaderboard[model_id]['wins'] += latest_round_wins[model_id]
 
     def play_tournament(self, n_rounds, n_episodes_x_round):
         for _ in tqdm(range(n_rounds), ascii=True, unit=' rounds'):
@@ -75,5 +75,5 @@ class ScumTournament:
 if __name__ == '__main__':
     mongodb = MongoDBManager(database="population-based-training")
     scum_tournament = ScumTournament(mongodb)
-    scum_tournament = scum_tournament.play_tournament(100, 10)
+    scum_tournament = scum_tournament.play_tournament(50, 10)
     print(scum_tournament.get_leaderboard())

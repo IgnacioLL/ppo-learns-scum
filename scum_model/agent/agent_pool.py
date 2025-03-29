@@ -8,8 +8,10 @@ from db.db import MongoDBManager
 
 from utils import utils
 
+from typing import Union
+
 class AgentPool:
-    def __init__(self, num_agents: int, mongodb_manager: MongoDBManager):
+    def __init__(self, num_agents: int, mongodb_manager: MongoDBManager=None):
         self.number_of_agents = num_agents
         self.order = list(range(self.number_of_agents))
         self.mongodb_manager = mongodb_manager
@@ -38,8 +40,11 @@ class AgentPool:
             agents.append(agent)
         return agents
     
-    def create_agents_with_paths(self, list_of_params_agent: List[Dict[str, Any]]):
-        self.agents = [A2CAgent(**params) for params in list_of_params_agent]
+    def create_agents_with_paths(self, list_of_params_agent: Union[List[Dict[str, Any]], Dict[str, Any]]):
+        if isinstance(list_of_params_agent, list):
+            self.agents = [A2CAgent(**params) for params in list_of_params_agent]
+        elif isinstance(list_of_params_agent, dict):
+            self.agents = [A2CAgent(**list_of_params_agent) for _ in range(self.number_of_agents)]
         return self
 
     def apply_discounted_returns_in_agents_buffer(self, episode_rewards, discount):
@@ -50,7 +55,7 @@ class AgentPool:
         for agent_number in range(self.number_of_agents):
             agent = self.get_agent(agent_number)
             if agent.training:
-                path = f"{C.MODELS_PATH}/model_{agent.model_id}_{str(episode)}.pt"
+                path = f"{C.MODELS_PATH}model_{agent.model_id}_{str(episode)}.pt"
                 self.agents[agent_number].save_model(path)
 
                 data = {'model_id': agent.model_id, 'load_model_path': path, 'current_episode': episode, 'model_tag': agent.model_tag, 'model_size': agent.model_size}

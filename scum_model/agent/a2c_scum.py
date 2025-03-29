@@ -36,10 +36,10 @@ class A2CScum:
             self.agent_pool.append_rewards_to_historic_record_to_each_agent(episode_rewards)
             self.agent_pool.append_win_to_historic_record_to_each_agent(winner_player)
 
-            if episode % self.train_models_every == 0:
+            if (episode % self.train_models_every == 0) & (episode != begin_episode):
                 self.train_models(episode)
 
-            if episode % self.aggregate_stats_every == 0:
+            if (episode % self.aggregate_stats_every == 0) & (episode != begin_episode):
                 self.agent_pool.flush_average_reward_to_tensorboard_from_each_agent(self.aggregate_stats_every, episode)
                 self.agent_pool.flush_win_rate_to_tensorboard_from_each_agent(self.aggregate_stats_every, episode)
             

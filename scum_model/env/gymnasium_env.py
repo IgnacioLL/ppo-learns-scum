@@ -54,6 +54,8 @@ class ScumEnv(gym.Env):
 
         self.winner_player = None
 
+        self.current_pile = []
+
     def run_episode(self, agent_pool: AgentPool, discount: float, verbose=False):
         done_agents = [False] * C.NUMBER_OF_AGENTS
         episode_rewards = [0] * C.NUMBER_OF_AGENTS
@@ -61,8 +63,8 @@ class ScumEnv(gym.Env):
         self.reset()
         while self.not_all_agents_done(agent_pool.number_of_agents, done_agents):
             agent = agent_pool.get_agent(self.player_turn)
-            state = self.get_state()
             action_space = self.get_action_space()
+            state = self.get_state(action_space)
             action, log_prob = agent.decide_move(state, action_space)
             if verbose:
                 self._print_move(action)
@@ -118,6 +120,8 @@ class ScumEnv(gym.Env):
         ## This changes self.player_turn
         self._update_player_turn(skip)
 
+        self.check_if_same_as_last_player()
+
         return current_state.detach(), total_reward, done, agent_number
     
     def _decode_action(self, action: int) -> Tuple[int, int]:
@@ -165,6 +169,7 @@ class ScumEnv(gym.Env):
         self.last_move = None
         self.players_in_round = self.players_in_game.copy()
         self.n_players_in_round = sum(self.players_in_round)
+        self.current_pile = []
 
     def _is_skip_move(self, card_number: int) -> bool:
         return self.last_move is not None and self.last_move[0] == card_number
@@ -179,8 +184,10 @@ class ScumEnv(gym.Env):
     def _update_player_cards(self, card_number: int, n_cards: int) -> None:
         if card_number == C.NUMBER_OF_CARDS_PER_SUIT + 1:  # two of hearts
             self.cards[self.player_turn][0].remove(card_number)
+            self.current_pile.append(card_number)
         else:
             for _ in range(n_cards + 1):
+                self.current_pile.append(card_number)
                 self.cards[self.player_turn][0].remove(card_number)
         self.cards[self.player_turn] = self._get_combinations(self.cards[self.player_turn][0])
         self.cards_thrown[card_number - 1] = (n_cards + 1) * (1/C.NUMBER_OF_SUITS)
@@ -219,14 +226,13 @@ class ScumEnv(gym.Env):
         self.previous_reward[self.player_turn] = total_reward
         self.previous_done[self.player_turn] = done
 
-    
-    def get_state(self) -> torch.Tensor:
-        if sum(self.players_in_game) == 0:
-            return
-
+    def check_if_same_as_last_player(self):
         if self.last_player == self.player_turn:
             self._reinitialize_round()
-            return self.get_state()
+    
+    def get_state(self, action_space) -> torch.Tensor:
+        if sum(self.players_in_game) == 0:
+            return
 
         cards = convert_to_binary_tensor(self.cards[self.player_turn], pass_option=True)
 
@@ -234,7 +240,7 @@ class ScumEnv(gym.Env):
         players_info = move_to_last_position(players_info, self.player_turn)
         cards_thrown = self.get_cards_thrown()
 
-        compact_action_space = data_utils.compact_form_of_states(self.get_action_space())
+        compact_action_space = data_utils.compact_form_of_states(action_space)
 
         state = torch.cat([cards, compact_action_space.to(C.DEVICE), torch.tensor(players_info, device=C.DEVICE), torch.tensor(cards_thrown, device=C.DEVICE)])
         return state.detach()

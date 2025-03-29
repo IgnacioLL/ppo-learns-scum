@@ -138,3 +138,4 @@ class NNet(nn.Module):
         action_logits = self.policy_probability(x)
 
         return value, action_logits
+    

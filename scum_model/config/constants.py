@@ -48,7 +48,7 @@ class Constants:
     CREATE_CHECKPOINT_EVERY = 2_000
     ASSESS_MODEL = 10_000
 
-    MODELS_PATH = f"models/"
+    MODELS_PATH = f"./models/"
 
     N_ITER_AGAINST_ANOTHER_MODEL = 10_000
     N_ITER_TOTAL = 200_000

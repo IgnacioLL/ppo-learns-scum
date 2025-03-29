@@ -51,6 +51,7 @@ class A2CAgent:
         self.current_episode = current_episode
         self.model = NNet(number_of_players=number_players, model=model_size, model_id=model_id).to(C.DEVICE)
         if load_model_path:
+            print(f"Loading model from {load_model_path}")
             self.model.load_state_dict(torch.load(load_model_path, weights_only=False))
 
         self.learning_rate = learning_rate
