@@ -32,25 +32,13 @@ agent_pool: AgentPool = None
 FACE_MAP_TO_UI = {1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8', 7: '9', 8: '10', 9: 'J', 10: 'Q', 11: 'K', 12: 'A', 13: '2', 14: '2'}
 SUITS = ['Heart', 'Spade', 'Club', 'Diamond']
 
-# --- Helper Functions (Keep map_card_to_ui, map_hand_to_ui, map_played_cards_to_ui as is) ---
-def map_card_to_ui(card_value: int, card_index: int) -> dict:
-    """Maps an internal card representation to the format React expects."""
-    face = FACE_MAP_TO_UI.get(card_value, '?')
-    suit = 'Spade'
-    return {
-        "id": f"{face}-{suit}-{random.random()}", # Generate a unique ID for React key
-        "cardFace": face,
-        "suit": suit,
-        "value": card_value # The crucial part for logic/sorting
-    }
-
 def map_hand_to_ui(hand_values: list) -> list:
     """Maps a list of internal card values to UI card objects for a player's hand."""
     ui_hand = []
     # Sort by value for consistent display in hand
     for i, value in enumerate(sorted(hand_values)):
         face = FACE_MAP_TO_UI.get(value, '?')
-        suit = 'Spade' # Example: Make Aces always Spade
+        suit = SUITS[i % len(SUITS)] # Cycle through suits
         if value == 14: # Special suit for '2' maybe?
             suit = 'Heart' # Example: Make 2s always Heart
 
@@ -73,7 +61,7 @@ def map_pile_to_ui(pile_values: list) -> list:
     for i, value in enumerate(pile_values):
         face = FACE_MAP_TO_UI.get(value, '?')
         # Assign suit based on index in pile for visual variety
-        suit = 'Spade'
+        suit = SUITS[i % len(SUITS)] # Cycle through suits
         if value == 14: suit = 'Heart' # Keep special suits if desired
 
         ui_cards.append({
@@ -93,7 +81,9 @@ def map_played_cards_to_ui(last_move: list) -> list:
     ui_cards = []
     face = FACE_MAP_TO_UI.get(card_value, '?')
     for i in range(num_cards):
-        suit = 'Spade'
+        suit = SUITS[i % len(SUITS)] # Cycle through suits
+        if card_value == 14: suit = 'Heart' # Keep special suits if desired
+
         ui_cards.append({
             "id": f"table-{face}-{suit}-{i}-{random.random()}",
             "cardFace": face,
