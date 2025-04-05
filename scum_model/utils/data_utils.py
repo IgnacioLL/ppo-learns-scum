@@ -5,7 +5,7 @@ from typing import Generator, Tuple, List
 from config.constants import Constants as C
 
 def shuffle_data(data):
-    states, returns, action_masks, actions, old_log_probs = data
+    states, returns, action_masks, actions, old_log_probs, next_actions = data
     num_transitions = len(states)
 
     # Generate a permutation index
@@ -17,27 +17,29 @@ def shuffle_data(data):
     shuffled_action_masks = action_masks[permutation]
     shuffled_actions = actions[permutation]
     shuffled_log_probs = old_log_probs[permutation]
+    shuffled_next_actions = next_actions[permutation]
 
-    return shuffled_states, shuffled_rewards, shuffled_action_masks, shuffled_actions, shuffled_log_probs
+    return shuffled_states, shuffled_rewards, shuffled_action_masks, shuffled_actions, shuffled_log_probs, shuffled_next_actions
 
 
 def remove_impossible_states(data):
-    states, rewards, action_masks, actions, old_log_probs = data
+    states, rewards, action_masks, actions, old_log_probs, next_actions = data
     impossible_states = ~torch.all(states == 0, dim=1)
     states = states[impossible_states]
     rewards = rewards[impossible_states]
     action_masks = action_masks[impossible_states]
     old_log_probs = old_log_probs[impossible_states]
+    next_actions = next_actions[impossible_states]
 
-    return states, rewards, action_masks, actions, old_log_probs
+    return states, rewards, action_masks, actions, old_log_probs, next_actions
 
 
 def create_batches(data, batch_size: int):
-    states, returns, action_space, actions, old_log_probs = data
+    states, returns, action_space, actions, old_log_probs, next_actions = data
     num_batches = (len(states) + batch_size - 1) // batch_size
     for i in range(num_batches):
         start, end = i * batch_size, min((i + 1) * batch_size, len(states))
-        yield states[start:end], returns[start:end], action_space[start:end], actions[start:end], old_log_probs[start:end]
+        yield states[start:end], returns[start:end], action_space[start:end], actions[start:end], old_log_probs[start:end], next_actions[start:end]
 
 
 def mask_impossible_actions(action_masks: torch.Tensor, policy_logits: torch.Tensor) -> torch.Tensor:

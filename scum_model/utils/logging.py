@@ -32,6 +32,7 @@ def initialize_metrics():
         'prob_3rd': {'total': 0, 'count': 0},
         'prob_median': {'total': 0, 'count': 0},
         'prob_min': {'total': 0, 'count': 0},
+        'next_action_loss': {'total': 0, 'count': 0},
     }
 
 

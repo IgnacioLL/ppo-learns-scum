@@ -5,7 +5,7 @@ from agent.a2c_agent import A2CAgent
 from typing import List, Dict, Any
 from config.constants import Constants as C
 from db.db import MongoDBManager
-
+import torch
 from utils import utils
 
 from typing import Union
@@ -86,3 +86,7 @@ class AgentPool:
             agent = self.get_agent(agent_number)
             agents_wins[agent.model_id] = sum(agent.wins)
         return agents_wins
+    
+    def add_next_actions_in_agents_buffers(self, next_actions: Dict[int, List[int]]):
+        for agent_number in next_actions.keys():
+            self.agents[agent_number].buffer.add_next_actions(next_actions[agent_number])

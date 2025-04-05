@@ -9,7 +9,7 @@ import numpy as np
 
 from config.constants import Constants as C
 import torch
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from math import ceil
 import random
 import collections
@@ -61,6 +61,7 @@ class ScumEnv(gym.Env):
         episode_rewards = [0] * C.NUMBER_OF_AGENTS
         all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
         self.reset()
+        self.players_actions = []
         while self.not_all_agents_done(agent_pool.number_of_agents, done_agents):
             self.check_if_same_as_last_player_and_reinitialize() ## if is the same player as before reinitialize round
 
@@ -70,6 +71,8 @@ class ScumEnv(gym.Env):
             action, log_prob = agent.decide_move(state, action_space)
             if verbose:
                 self._print_move(action)
+            
+            self.players_actions.append((self.player_turn, action))
             current_state, reward, done, agent_number = self.step(action, state)
 
             done_agents[agent_number] = done
@@ -80,6 +83,8 @@ class ScumEnv(gym.Env):
 
 
         agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
+        next_actions = self.get_next_actions_near_players()
+        agent_pool.add_next_actions_in_agents_buffers(next_actions)
 
         return episode_rewards, self.get_winner_player()
     
@@ -317,6 +322,34 @@ class ScumEnv(gym.Env):
         deck.append(C.NUMBER_OF_CARDS_PER_SUIT + 1)  # 2 of hearts
         return deck
     
+    def get_next_actions_near_players(self):
+        actions = {agent_number: [] for agent_number in range(self.number_players)}
+        for agent_number in range(self.number_players):
+            new_data = []
+            next_actions = []
+            for agent, action in self.players_actions:
+                if (len(new_data) == 0) & (agent != agent_number):
+                    continue
+                if agent == agent_number:
+                    if len(new_data) > 0:
+                        next_actions.append(self._convert_to_ohe(new_data))
+                    new_data = [58, 58, 58, 58]
+                    continue
+                relative_position = ((agent - agent_number) % 5) - 1
+                if new_data[relative_position] == 58:
+                    new_data[relative_position] = action
+            next_actions.append(self._convert_to_ohe(new_data))
+            actions[agent_number] = next_actions
+        return actions
+
+    @staticmethod
+    def _convert_to_ohe(data: List[int]):
+        ohe_data = []
+        for action in data:
+            ohe_action = np.zeros(C.NUMBER_OF_POSSIBLE_STATES + 1)
+            ohe_action[action - 1] = 1
+            ohe_data.append(ohe_action)
+        return ohe_data
 
     @classmethod
     def _get_combinations(cls, cards: List[int]) -> List[List[int]]:
