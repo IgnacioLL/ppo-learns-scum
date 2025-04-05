@@ -32,13 +32,12 @@ class AgentPool:
                 return agent_number
 
     def create_agents_with_nnet_initialization(self, **model_params) -> List[A2CAgent]:
-        training_agent = A2CAgent(**model_params)
-        training_agent.set_training(True)
-        agents = [training_agent]
+        training_agent = A2CAgent(**model_params, training=True)
+        self.agents = [training_agent]
         for i in range(1, self.number_of_agents):
             agent = A2CAgent(**model_params)
-            agents.append(agent)
-        return agents
+            self.agents.append(agent)
+        return self
     
     def create_agents_with_paths(self, list_of_params_agent: Union[List[Dict[str, Any]], Dict[str, Any]]):
         if isinstance(list_of_params_agent, list):
@@ -59,7 +58,8 @@ class AgentPool:
                 self.agents[agent_number].save_model(path)
 
                 data = {'model_id': agent.model_id, 'load_model_path': path, 'current_episode': episode, 'model_tag': agent.model_tag, 'model_size': agent.model_size}
-                self.mongodb_manager.insert_one(C.NAME_COLLECTION_CHECKPOINTS, data)
+                if self.mongodb_manager:
+                    self.mongodb_manager.insert_one(C.NAME_COLLECTION_CHECKPOINTS, data)
 
     def append_rewards_to_historic_record_to_each_agent(self, episode_rewards: List[float]):
         for agent_number, reward in enumerate(episode_rewards):

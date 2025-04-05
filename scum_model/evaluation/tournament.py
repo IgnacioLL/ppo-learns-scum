@@ -67,9 +67,8 @@ class ScumTournament:
         return agent_params
 
     def get_leaderboard(self):
-        df = pd.DataFrame.from_dict(self.leaderboard, orient='index', columns=['total_wins'])
-        df = df.reset_index().rename(columns={'index': 'model_id'})
-        df = df.sort_values('total_wins', ascending=False)
+        df = pd.DataFrame.from_records(self.leaderboard).T
+        df = df.sort_values('wins', ascending=False)
         return df
 
 if __name__ == '__main__':

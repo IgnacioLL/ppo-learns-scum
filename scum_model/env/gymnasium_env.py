@@ -62,6 +62,8 @@ class ScumEnv(gym.Env):
         all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
         self.reset()
         while self.not_all_agents_done(agent_pool.number_of_agents, done_agents):
+            self.check_if_same_as_last_player_and_reinitialize() ## if is the same player as before reinitialize round
+
             agent = agent_pool.get_agent(self.player_turn)
             action_space = self.get_action_space()
             state = self.get_state(action_space)
@@ -75,6 +77,7 @@ class ScumEnv(gym.Env):
             all_rewards[agent_number].append(reward)
 
             agent.buffer.save_in_buffer(current_state, reward, action_space, action, log_prob)
+
 
         agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
 
@@ -120,7 +123,8 @@ class ScumEnv(gym.Env):
         ## This changes self.player_turn
         self._update_player_turn(skip)
 
-        self.check_if_same_as_last_player()
+
+        self.check_if_same_as_last_player_and_reinitialize()
 
         return current_state.detach(), total_reward, done, agent_number
     
@@ -226,13 +230,17 @@ class ScumEnv(gym.Env):
         self.previous_reward[self.player_turn] = total_reward
         self.previous_done[self.player_turn] = done
 
-    def check_if_same_as_last_player(self):
+    def check_if_same_as_last_player_and_reinitialize(self):
         if self.last_player == self.player_turn:
             self._reinitialize_round()
     
     def get_state(self, action_space) -> torch.Tensor:
         if sum(self.players_in_game) == 0:
             return
+        if self.last_move:
+            action_taken = [self.last_move[0] + (self.last_move[1] * (C.NUMBER_OF_CARDS_PER_SUIT + 1))]
+        else:
+            action_taken = [-1]
 
         cards = convert_to_binary_tensor(self.cards[self.player_turn], pass_option=True)
 
@@ -242,7 +250,13 @@ class ScumEnv(gym.Env):
 
         compact_action_space = data_utils.compact_form_of_states(action_space)
 
-        state = torch.cat([cards, compact_action_space.to(C.DEVICE), torch.tensor(players_info, device=C.DEVICE), torch.tensor(cards_thrown, device=C.DEVICE)])
+        state = torch.cat([
+            cards,
+            compact_action_space.to(C.DEVICE),
+            torch.tensor(players_info, device=C.DEVICE),
+            torch.tensor(cards_thrown, device=C.DEVICE),
+            torch.tensor(action_taken, device=C.DEVICE),
+            ])
         return state.detach()
 
     def get_action_space(self) -> torch.Tensor:
