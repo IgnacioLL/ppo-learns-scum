@@ -53,7 +53,13 @@ class A2CAgent:
         self.helper_model = HelperNNet().to(C.DEVICE)
         if load_model_path:
             print(f"Loading model from {load_model_path}")
-            self.model.load_state_dict(torch.load(load_model_path, weights_only=False))
+            helper_model_path = load_model_path.replace(f"model_{self.model_id}", f"helper_model_{self.model_id}")
+            state_dict = torch.load(load_model_path, weights_only=True)  # Note: weights_only=True
+            helper_state_dict = torch.load(helper_model_path, weights_only=True)
+            self.model.load_state_dict(state_dict)
+            self.helper_model.load_state_dict(helper_state_dict)
+            del state_dict  # Explicitly delete the state dictionary after loading
+            torch.cuda.empty_cache()  # Force CUDA to free any cached memory
 
         self.learning_rate = learning_rate
         self.initial_learning_rate = self.learning_rate * C.INITIAL_LR_FACTOR
@@ -85,6 +91,40 @@ class A2CAgent:
         self.lr_helper_model = 1e-4
         self.optimizer_helper_model = Adam(self.helper_model.parameters(), lr=self.lr_helper_model)
 
+    def __del__(self):
+        """Destructor that ensures proper cleanup of resources when the object is garbage collected."""
+        try:
+            self.cleanup()
+            
+            if hasattr(self, 'model'):
+                self.model = None
+            
+            if hasattr(self, 'helper_model'):
+                self.helper_model = None
+                
+            if hasattr(self, 'optimizer'):
+                self.optimizer = None
+                
+            if hasattr(self, 'optimizer_helper_model'):
+                self.optimizer_helper_model = None
+                
+            if hasattr(self, 'buffer'):
+                self.buffer.clear_buffer()
+                self.buffer = None
+                
+            if hasattr(self, 'writer') and self.writer is not None:
+                self.writer.close()
+                self.writer = None
+                
+            # Clear any lists that might hold references
+            if hasattr(self, 'episode_rewards'):
+                self.episode_rewards.clear()
+                
+            if hasattr(self, 'wins'):
+                self.wins.clear()
+                
+        except Exception as e:
+            print(f"Error during A2CAgent cleanup: {e}")
 
     def set_training(self, set_to_train: bool) -> None:
         self.training = set_to_train
@@ -131,7 +171,7 @@ class A2CAgent:
     @torch.no_grad()
     def predict(self, state):
         latent_space, _ = self.helper_model.forward(state)
-        _, probs = self.model.forward(state, latent_space)
+        _, probs = self.model.forward(state, latent_space.detach().clone())
         return probs.detach().clone()  # Explicitly detach and clone
 
 
@@ -237,10 +277,30 @@ class A2CAgent:
 
     def save_model(self, path: str = "model.pt") -> None:
         torch.save(self.model.state_dict(), path)
+        helper_model_path = path.replace(f"model_{self.model_id}", f"helper_model_{self.model_id}")
+        torch.save(self.helper_model.state_dict(), helper_model_path)
 
     def load_model(self, path: str = "model.pt") -> nn.Module:
         model = torch.load(path)
         return model
+        
+    def cleanup(self):
+        """Explicitly release GPU memory by clearing model references and cached tensors."""
+        if hasattr(self, 'model') and self.model is not None:
+            # Clear any cached tensors
+            for param in self.model.parameters():
+                if param.grad is not None:
+                    param.grad = None
+            
+        if hasattr(self, 'helper_model') and self.helper_model is not None:
+            # Clear any cached tensors
+            for param in self.helper_model.parameters():
+                if param.grad is not None:
+                    param.grad = None
+                    
+        # Force a CUDA cache clear
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def append_episode_rewards(self, reward):
         self.episode_rewards.append(reward)

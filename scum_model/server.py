@@ -18,6 +18,7 @@ try:
     from env.gymnasium_env import ScumEnv
     from config.constants import Constants as C
     from db.db import MongoDBManager # Import the DB Manager
+    import numpy as np
 except ImportError as e:
     print(f"Error importing modules: {e}")
     print("Ensure server.py is in the correct location relative to 'agent', 'env', 'config', 'utils', and 'MongoDBManager.py'")
@@ -28,7 +29,7 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Global Game State Management ---
-active_games = {} # Key: game_id (str), Value: {'env': ScumEnv, 'pool': AgentPool, 'player_names': List[str]}
+active_games = {} 
 game_lock = threading.Lock() # Lock to ensure thread-safe access to active_games
 
 # --- Database Setup ---
@@ -237,14 +238,15 @@ def start_game():
         num_players = C.NUMBER_OF_AGENTS
         local_env = ScumEnv(number_players=num_players)
         local_env.reset()
+        local_env.player_turn = np.random.randint(0, 4)
         local_pool = AgentPool(num_agents=num_players)
         # Load your agent models as before...
         local_pool = local_pool.create_agents_with_paths(
              {
-                'model_id': '7158d399-3458-408c-b72a-87a3fdc1aa4e',
+                'model_id': 'fb50b8c8-3848-4b5e-a144-5efb6a256dad',
                 'model_tag': 'testing',
-                'model_size': 'big',
-                'load_model_path': './models/model_7158d399-3458-408c-b72a-87a3fdc1aa4e_50000.pt'
+                'model_size': 'large-sep-arch',
+                'load_model_path': './models/model_fb50b8c8-3848-4b5e-a144-5efb6a256dad_240000.pt'
                 }
         )
 
@@ -253,7 +255,6 @@ def start_game():
 
         print(f"Game [{game_id}] environment initialized for {num_players} players.")
         print(f"Game [{game_id}] Player names: {player_names}")
-        # print(f"Game [{game_id}] Initial hands (internal): {local_env.cards}")
         print(f"Game [{game_id}] Starting player index: {local_env.player_turn}")
 
         # --- Run ONLY the FIRST AI turn if AI starts ---
@@ -266,7 +267,6 @@ def start_game():
 
                 if state is not None and action_space is not None:
                     action, _ = agent.decide_move(state, action_space)
-                    action = int(action.item())
                     # env_utils.decode_action(action) # Log decoded action
                     _, _, done, _ = local_env.step(action, state)
                     print(f"  Game [{game_id}] AI Player {local_env.last_player} took first turn. Next is Player {local_env.player_turn}")

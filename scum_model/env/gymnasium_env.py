@@ -56,7 +56,7 @@ class ScumEnv(gym.Env):
 
         self.current_pile = []
 
-    def run_episode(self, agent_pool: AgentPool, discount: float, verbose=False):
+    def run_episode(self, agent_pool: AgentPool, discount: float, verbose=False, save_in_buffer=True):
         done_agents = [False] * C.NUMBER_OF_AGENTS
         episode_rewards = [0] * C.NUMBER_OF_AGENTS
         all_rewards = [[] for _ in range(C.NUMBER_OF_AGENTS)]
@@ -78,13 +78,14 @@ class ScumEnv(gym.Env):
             done_agents[agent_number] = done
             episode_rewards[agent_number] += reward
             all_rewards[agent_number].append(reward)
+            if save_in_buffer:
+                agent.buffer.save_in_buffer(current_state, reward, action_space, action, log_prob)
 
-            agent.buffer.save_in_buffer(current_state, reward, action_space, action, log_prob)
 
-
-        agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
-        next_actions = self.get_next_actions_near_players()
-        agent_pool.add_next_actions_in_agents_buffers(next_actions)
+        if save_in_buffer:
+            agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
+            next_actions = self.get_next_actions_near_players()
+            agent_pool.add_next_actions_in_agents_buffers(next_actions)
 
         return episode_rewards, self.get_winner_player()
     

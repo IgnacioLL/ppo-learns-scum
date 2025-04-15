@@ -11,7 +11,10 @@ import pandas as pd
 
 from typing import List, Dict
 from tqdm import tqdm
+import torch
 
+
+from utils import utils
 class ScumTournament:
     def __init__(self, mongodb_manager: MongoDBManager):
         self.env = ScumEnv(C.NUMBER_OF_AGENTS)
@@ -29,19 +32,26 @@ class ScumTournament:
     def play_tournament(self, n_rounds, n_episodes_x_round):
         for _ in tqdm(range(n_rounds), ascii=True, unit=' rounds'):
             self.play_round(n_episodes_x_round)
-        return self
     
     def play_round(self, episodes):
+        utils.log_vram_memory("Before make agent pools")
         agent_pools = self.make_agent_pools()
+        utils.log_vram_memory("After making agent pools")
         for agent_pool in agent_pools:
             env = ScumEnv(C.NUMBER_OF_AGENTS)
             for _ in range(episodes):
                 agent_pool.randomize_order()
-                _, wins = env.run_episode(agent_pool, C.DISCOUNT)
+                with torch.no_grad():
+                    _, wins = env.run_episode(agent_pool, C.DISCOUNT, save_in_buffer=False)
+
                 agent_pool.append_win_to_historic_record_to_each_agent(wins)
             wins_per_agent = agent_pool.extract_wins_agents()
             self.update_leaderboard(wins_per_agent)
-    
+        for agent_pool in agent_pools:
+            del agent_pool
+        utils.log_vram_memory("After deletion of agent pools")
+
+
     def make_agent_pools(self) -> List[AgentPool]:
         model_params = self.extract_models_params_latest_checkpoint()
         model_params_groups = utils.divide_into_subgroups(model_params, k=len(self.leaderboard.keys()) // C.NUMBER_OF_AGENTS)
@@ -51,7 +61,6 @@ class ScumTournament:
             agent_pool = AgentPool(C.NUMBER_OF_AGENTS, self.mongodb_manager)
             agent_pool = agent_pool.create_agents_with_paths(group_params)
             agent_pools.append(agent_pool)
-
         return agent_pools
 
     def extract_models_params_latest_checkpoint(self):
