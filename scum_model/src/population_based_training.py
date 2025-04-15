@@ -30,10 +30,10 @@ class PopulationBasedTraining:
     def generate_params(self):
         params = {
             "learning_rate": loguniform.rvs(5e-6, 5e-4),
-            "model_size": np.random.choice(['small', 'medium', 'big', 'large', 'small-sep-arch', 'medium-sep-arch', 'big-sep-arch', 'large-sep-arch']), 
-            "policy_error_coef": np.random.uniform(0.25, 1.25),
-            "value_error_coef": np.random.uniform(0.25, 1.25), # The advantadge is of low magnitude
-            "entropy_coef": np.random.uniform(0, 0.25),
+            "model_size": np.random.choice(['large-sep-arch']), 
+            "policy_error_coef": np.random.uniform(0.75, 1.25),
+            "value_error_coef": np.random.uniform(0.75, 1.25), # The advantadge is of low magnitude
+            "entropy_coef": np.random.uniform(0, 0.3),
             "current_episode": 0,
             'load_model_path': None, 
         }
@@ -110,7 +110,7 @@ class PopulationBasedTraining:
             model_checkpoint
             for model_checkpoint in checkpoints
             if (model_checkpoint["current_episode"] <= training_model['current_episode']) &
-              (model_checkpoint["current_episode"] >= (training_model['current_episode']//2))
+              (model_checkpoint["current_episode"] >= (training_model['current_episode'] // 1.5))
         ]
         chosen_params: Dict = np.random.choice(candidate_checkpoints)
         chosen_params.pop('_id')

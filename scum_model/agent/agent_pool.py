@@ -5,7 +5,7 @@ from agent.a2c_agent import A2CAgent
 from typing import List, Dict, Any
 from config.constants import Constants as C
 from db.db import MongoDBManager
-
+import torch
 from utils import utils
 
 from typing import Union
@@ -15,6 +15,20 @@ class AgentPool:
         self.number_of_agents = num_agents
         self.order = list(range(self.number_of_agents))
         self.mongodb_manager = mongodb_manager
+
+    def __del__(self):
+        """Destructor that ensures proper cleanup of all agents in the pool when garbage collected."""
+        try:
+            if hasattr(self, 'agents'):
+                for agent in self.agents:
+                    if agent is not None:
+                        # This will trigger each agent's __del__ method
+                        del agent
+                
+                # Clear the agents list
+                self.agents = []
+        except Exception as e:
+            print(f"Error during AgentPool cleanup: {e}")
 
     def get_agent(self, agent_number: int) -> A2CAgent:
         return self.agents[agent_number]
@@ -86,3 +100,41 @@ class AgentPool:
             agent = self.get_agent(agent_number)
             agents_wins[agent.model_id] = sum(agent.wins)
         return agents_wins
+    
+    def add_next_actions_in_agents_buffers(self, next_actions: Dict[int, List[int]]):
+        for agent_number in next_actions.keys():
+            self.agents[agent_number].buffer.add_next_actions(next_actions[agent_number])
+
+    def clear_buffer_all_agents(self):
+        for agent in self.agents:
+            agent.buffer.clear_buffer()
+
+    def cleanup(self):
+        """Explicitly delete models and clear agent list to release resources."""
+        for agent in self.agents:
+            if hasattr(agent, 'cleanup'):
+                agent.cleanup()  # Use the agent's cleanup method
+            else:
+                # Fallback for backward compatibility
+                if hasattr(agent, 'model') and agent.model is not None:
+                    del agent.model # Remove reference to the model
+                if hasattr(agent, 'actor') and agent.actor is not None:
+                    del agent.actor
+                if hasattr(agent, 'critic') and agent.critic is not None:
+                    del agent.critic
+                # Add deletion for any other large objects (like optimizers if they exist)
+                if hasattr(agent, 'optimizer') and agent.optimizer is not None:
+                    del agent.optimizer # Optimizers can hold references to model params
+
+        # Clear the list of agents itself
+        self.agents = []
+        
+        # Force garbage collection
+        import gc
+        gc.collect()
+        
+        # Force CUDA cache clear
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        print("AgentPool cleanup complete.") # Debug print
