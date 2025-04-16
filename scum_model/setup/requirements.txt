@@ -6,3 +6,6 @@ stable-baselines3
 pyarrow
 pymongo
 scipy
+flask
+flask-cors
+psutil
