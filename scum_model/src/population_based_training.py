@@ -10,6 +10,7 @@ from agent.agent_pool import AgentPool
 from db.db import MongoDBManager
 from config.constants import Constants as C
 import uuid
+from utils import db_utils
 
 from typing import Dict, Any, List
 
@@ -26,12 +27,7 @@ class PopulationBasedTraining:
         self.n_iter_against_another_model = n_iter_against_another_model
         self.number_of_models_in_parallel = number_of_models_in_parallel
         self.mongodb_manager = MongoDBManager(database="population-based-training")
-        self.models_training = self.extract_all_models_in_db() if models_training is None else models_training
-
-
-    def extract_all_models_in_db(self):
-        params = self.mongodb_manager.find_many(C.NAME_COLLECTION_CHECKPOINTS)
-        return list({param['model_id'] for param in params})
+        self.models_training = db_utils.extract_all_models_in_db(self.mongodb_manager) if models_training is None else models_training
 
     def generate_params(self):
         params = {
@@ -159,6 +155,6 @@ if __name__ == '__main__':
         "631941e3-f3db-438e-9ca4-12605fd0423c",
         "c401ab2d-0403-4468-af57-aea518cf56cc"
     ]
-    pbt = PopulationBasedTraining(500_000, 50_000, 5, models_id)
+    pbt = PopulationBasedTraining(600_000, 50_000, 5, models_id)
     pbt.training(True)
         

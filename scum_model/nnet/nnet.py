@@ -77,9 +77,9 @@ class NNet(nn.Module):
             nn.Linear(neurons*2, neurons),
             nn.LayerNorm(neurons),
             nn.LeakyReLU(), 
-            nn.Linear(neurons, neurons//4),
+            nn.Linear(neurons, neurons // 4),
             nn.LeakyReLU(), 
-            nn.Linear(neurons//4, 1)
+            nn.Linear(neurons // 4, 1)
         )
         
         self.policy_probability = nn.Sequential(

@@ -24,7 +24,7 @@ from utils import data_utils, logging, loss_utils, utils, env_utils
 from utils.ml_utils import CoolerLRScheduler
 from buffer.buffer import Buffer
 
-from typing import Union
+from typing import Union, Tuple
 
 class A2CAgent:
     def __init__(
@@ -53,13 +53,16 @@ class A2CAgent:
         self.helper_model = HelperNNet().to(C.DEVICE)
         if load_model_path:
             print(f"Loading model from {load_model_path}")
-            helper_model_path = load_model_path.replace(f"model_{self.model_id}", f"helper_model_{self.model_id}")
             state_dict = torch.load(load_model_path, weights_only=True)  # Note: weights_only=True
-            helper_state_dict = torch.load(helper_model_path, weights_only=True)
             self.model.load_state_dict(state_dict)
-            self.helper_model.load_state_dict(helper_state_dict)
-            del state_dict  # Explicitly delete the state dictionary after loading
-            torch.cuda.empty_cache()  # Force CUDA to free any cached memory
+
+            try: 
+                helper_model_path = load_model_path.replace(f"model_{self.model_id}", f"helper_model_{self.model_id}")
+                helper_state_dict = torch.load(helper_model_path, weights_only=True)
+                self.helper_model.load_state_dict(helper_state_dict)
+            except FileNotFoundError:
+                print("No helper model created")
+
 
         self.learning_rate = learning_rate
         self.initial_learning_rate = self.learning_rate * C.INITIAL_LR_FACTOR
@@ -182,22 +185,21 @@ class A2CAgent:
 
         data = data_utils.remove_impossible_states(data)
         for epoch in range(self.epochs):
-            self.epoch = epoch
             data = data_utils.shuffle_data(data)
 
             for batch_data in data_utils.create_batches(data, batch_size):
-                batch_metrics = self.train_on_batch(batch_data)
+                batch_metrics = self.train_on_batch(batch_data, epoch)
                 logging.accumulate_metrics(metrics, batch_metrics)
         
         avg_metrics = logging.average_metrics(metrics)
         logging.flush_performance_stats_tensorboard(self.writer, avg_metrics, episode)
 
-    def train_on_batch(self, batch_data):
+    def train_on_batch(self, batch_data, epoch):
         batch_states, batch_returns, batch_action_space, batch_action, batch_old_log_prob, batch_next_actions = batch_data
         latent_space, next_actions = self.helper_model.forward(batch_states)
-        value_preds, policy_logits = self.model.forward(batch_states, latent_space.clone().detach())
-
         next_action_loss = self.train_next_action_on_batch(batch_next_actions, next_actions)
+        
+        value_preds, policy_logits = self.model.forward(batch_states, latent_space.clone().detach())
 
         probs = F.softmax(policy_logits, dim=-1)
         value_preds = value_preds.squeeze()
@@ -234,7 +236,7 @@ class A2CAgent:
         self.optimizer.step()
         self.scheduler.step()
 
-        ratio_5th_epoch = torch.abs(ratio - 1).mean().item() if self.epoch == 4 else None
+        ratio_5th_epoch = torch.abs(ratio - 1).mean().item() if epoch == 4 else None
 
         return {
             'loss_value': value_loss.item() * self.value_error_coef,
@@ -260,15 +262,28 @@ class A2CAgent:
             'next_action_loss': next_action_loss.item()
         }
     
-    def train_next_action_on_batch(self, batch_next_actions, next_actions_pred_tuple):
+    def train_next_action_on_batch(self, batch_next_actions: torch.Tensor, next_actions_pred_tuple: Tuple[torch.Tensor]):
         total_loss = 0
         num_players = len(next_actions_pred_tuple) # Should be 4 based on NNet
         for i in range(C.NUMBER_OF_AGENTS - 1):
             player_ground_truth = batch_next_actions[:, i]
             player_pred_logits = next_actions_pred_tuple[i]
+            print(torch.argmax(player_pred_logits, dim=1))
+            print(torch.argmax(player_ground_truth, dim=1))
+            print(torch.argmax(player_pred_logits, dim=1) == torch.argmax(player_ground_truth, dim=1))
             loss = F.cross_entropy(player_pred_logits, player_ground_truth) # Removed .mean() as cross_entropy averages by default
+            if torch.argmax(player_pred_logits) > 57:
+                print(player_ground_truth.clone().detach().cpu().numpy())
+                print(player_pred_logits.clone().detach().cpu().numpy())
+
+                print(player_ground_truth.size())
+                print(player_pred_logits.size())
+                assert False
+            
             total_loss += loss
+
         avg_loss = total_loss / num_players
+        
         self.optimizer_helper_model.zero_grad()
         avg_loss.backward()
         self.optimizer_helper_model.step()

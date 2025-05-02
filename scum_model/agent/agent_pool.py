@@ -101,6 +101,13 @@ class AgentPool:
             agents_wins[agent.model_id] = sum(agent.wins)
         return agents_wins
     
+    def extract_wins_agents_w_current_episode(self):
+        agents_wins = {}
+        for agent_number in range(self.number_of_agents):
+            agent = self.get_agent(agent_number)
+            agents_wins[agent.model_id + "-" + str(agent.current_episode)] = sum(agent.wins)
+        return agents_wins
+    
     def add_next_actions_in_agents_buffers(self, next_actions: Dict[int, List[int]]):
         for agent_number in next_actions.keys():
             self.agents[agent_number].buffer.add_next_actions(next_actions[agent_number])
