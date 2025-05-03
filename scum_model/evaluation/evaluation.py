@@ -7,24 +7,23 @@ from agent.agent_pool import AgentPool
 from config.constants import Constants as C
 import pandas as pd
 
+from tqdm import tqdm
 from db.db import MongoDBManager
 
-def evaluate(parameters, verbose=False):
+def evaluate(rounds, parameters, verbose=False):
     env = ScumEnv(5)
     agent_pool = AgentPool(5)
     agent_pool = agent_pool.create_agents_with_parameters(parameters)
-    winners = []
-    for _ in range(10):
+    for _ in tqdm(range(rounds), ascii=True, unit=' round/s'):
         agent_pool = agent_pool.randomize_order()
-        _ , winner = env.run_episode(agent_pool, C.DISCOUNT, verbose)
-    agent_ids = [agent_pool.get_agent(i).model_id + "-" + str(i) for i in range(agent_pool.number_of_agents)]
-    df = pd.DataFrame(winners, columns=agent_ids)
+        _ , winner = env.run_episode(agent_pool, C.DISCOUNT, verbose, save_in_buffer=False)
+        agent_pool.append_win_to_historic_record_to_each_agent(winner)
+        leaderboard = agent_pool.extract_wins_agents_with_invented_id()
+    df = pd.DataFrame(leaderboard.values(), index=leaderboard.keys()).T
     os.makedirs("./analytics/data/evaluation/", exist_ok=True)
     df.to_parquet("./analytics/data/evaluation/evaluation.parquet")
     print(df)
     return df
-
-
 
 if __name__ == '__main__':
     mongodb_manager = MongoDBManager(database="population-based-training")
@@ -40,4 +39,4 @@ if __name__ == '__main__':
         {'model_id': 'heuristic', 'model_size': 'heuristic', 'model_tag': 'heuristic'},
         model_param
         ]
-    evaluate(parameters)
+    evaluate(5_000, parameters)

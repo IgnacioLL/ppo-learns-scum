@@ -10,8 +10,10 @@ def heuristic_play(possible_actions: np.ndarray, state: torch.Tensor):
     conservative_play = np.min(possible_actions)
     peaky_possibility = np.sum(possible_actions % 14 == 5) > 0
     peaky_play = np.max(possible_actions[possible_actions % 14 == 5]) if peaky_possibility else 0
-    possible_actions[-1] = - possible_actions[-1] ## avoid passing
-    agressive_play = np.max(possible_actions) 
+    possible_actions = np.where(possible_actions == 57, -57, possible_actions) ## avoid passing
+    agg_play = np.max(possible_actions)
+    agressive_play = - agg_play if  agg_play == -57 else agg_play
+
     ratio_of_difference = extract_ratio_btw_player_and_opp(state)
 
     if ratio_of_difference < 0.6:

@@ -78,11 +78,11 @@ class ScumEnv(gym.Env):
             done_agents[agent_number] = done
             episode_rewards[agent_number] += reward
             all_rewards[agent_number].append(reward)
-            if agent.training:
+            if save_in_buffer:
                 agent.buffer.save_in_buffer(current_state, reward, action_space, action, log_prob)
 
 
-        if agent.training:
+        if save_in_buffer:
             agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
             next_actions = self.get_next_actions_near_players()
             agent_pool.add_next_actions_in_agents_buffers(next_actions)

@@ -157,6 +157,7 @@ class NNet(nn.Module):
         x_and_latent_space = torch.cat([state, embedded_last_action, latent_space], dim=1)
         if self.chore_part:
             x_and_latent_space = self.chore_part(x_and_latent_space)
+        x_and_latent_space = x_and_latent_space.to(dtype=torch.float32)
         value = self.value_estimate(x_and_latent_space)
         action_logits = self.policy_probability(x_and_latent_space)
         return value, action_logits
@@ -213,6 +214,8 @@ class HelperNNet(nn.Module):
         embedded_last_action = self.embedding(last_action)
 
         x = torch.cat([state, embedded_last_action], dim=1)
+
+        x = x.to(dtype=torch.float32)
 
         next_action_latent_space = self.next_action_prediction_chore(x)
 

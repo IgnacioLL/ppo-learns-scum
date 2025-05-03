@@ -23,8 +23,10 @@ from nnet.nnet import NNet, HelperNNet
 from utils import data_utils, logging, loss_utils, utils, env_utils
 from utils.ml_utils import CoolerLRScheduler
 from buffer.buffer import Buffer
+from agent.heuristic_player import heuristic_play
 
 from typing import Union, Tuple
+
 
 class A2CAgent:
     def __init__(
@@ -44,55 +46,56 @@ class A2CAgent:
             epochs=C.N_EPOCH_PER_STEP,
             current_episode=0
             ):
-        
         self.model_id = model_id
         self.model_tag = model_tag
         self.model_size = model_size
-        self.current_episode = current_episode
-        self.model = NNet(number_of_players=number_players, model=model_size, model_id=model_id).to(C.DEVICE)
-        self.helper_model = HelperNNet().to(C.DEVICE)
-        if load_model_path:
-            print(f"Loading model from {load_model_path}")
-            state_dict = torch.load(load_model_path, weights_only=True)  # Note: weights_only=True
-            self.model.load_state_dict(state_dict)
-
-            try: 
-                helper_model_path = load_model_path.replace(f"model_{self.model_id}", f"helper_model_{self.model_id}")
-                helper_state_dict = torch.load(helper_model_path, weights_only=True)
-                self.helper_model.load_state_dict(helper_state_dict)
-            except FileNotFoundError:
-                print("No helper model created")
-
-
-        self.learning_rate = learning_rate
-        self.initial_learning_rate = self.learning_rate * C.INITIAL_LR_FACTOR
-        self.current_learning_rate = self.initial_learning_rate
-        self.discount = discount
-        self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
-        self.scheduler = CoolerLRScheduler(
-            self.optimizer,
-            cooler_steps=C.COOLER_STEPS,
-            initial_lr=learning_rate*C.INITIAL_LR_FACTOR,
-            target_lr=learning_rate
-        )
-        self.policy_error_coef = policy_error_coef
-        self.value_error_coef = value_error_coef
-        self.entropy_coef = entropy_coef
-
-        self.epochs = epochs
-        
         self.training = training
-        self.playing = playing
-        self.buffer = Buffer()
-        if training:
-            print("Writer")
-            self.writer = SummaryWriter(log_dir=f"./runs/{model_id}-{model_tag}")
-
         self.episode_rewards = []
         self.wins = []
+        if self.model_id not in ['heuristic', 'human']:
+            self.current_episode = current_episode
+            self.model = NNet(number_of_players=number_players, model=model_size, model_id=model_id).to(C.DEVICE)
+            self.helper_model = HelperNNet().to(C.DEVICE)
+            if load_model_path:
+                print(f"Loading model from {load_model_path}")
+                state_dict = torch.load(load_model_path, weights_only=True)  # Note: weights_only=True
+                self.model.load_state_dict(state_dict)
 
-        self.lr_helper_model = 1e-4
-        self.optimizer_helper_model = Adam(self.helper_model.parameters(), lr=self.lr_helper_model)
+                try: 
+                    helper_model_path = load_model_path.replace(f"model_{self.model_id}", f"helper_model_{self.model_id}")
+                    helper_state_dict = torch.load(helper_model_path, weights_only=True)
+                    self.helper_model.load_state_dict(helper_state_dict)
+                except FileNotFoundError:
+                    print("No helper model created")
+
+
+            self.learning_rate = learning_rate
+            self.initial_learning_rate = self.learning_rate * C.INITIAL_LR_FACTOR
+            self.current_learning_rate = self.initial_learning_rate
+            self.discount = discount
+            self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
+            self.scheduler = CoolerLRScheduler(
+                self.optimizer,
+                cooler_steps=C.COOLER_STEPS,
+                initial_lr=learning_rate*C.INITIAL_LR_FACTOR,
+                target_lr=learning_rate
+            )
+            self.policy_error_coef = policy_error_coef
+            self.value_error_coef = value_error_coef
+            self.entropy_coef = entropy_coef
+
+            self.epochs = epochs
+            
+            self.playing = playing
+            self.buffer = Buffer()
+            if training:
+                print("Writer")
+                self.writer = SummaryWriter(log_dir=f"./runs/{model_id}-{model_tag}")
+
+
+
+            self.lr_helper_model = 1e-4
+            self.optimizer_helper_model = Adam(self.helper_model.parameters(), lr=self.lr_helper_model)
 
     def __del__(self):
         """Destructor that ensures proper cleanup of resources when the object is garbage collected."""
@@ -132,12 +135,11 @@ class A2CAgent:
     def set_training(self, set_to_train: bool) -> None:
         self.training = set_to_train
 
-    def set_playing(self, set_to_play: bool) -> None:
-        self.playing = set_to_play
-
     def decide_move(self, state: torch.Tensor, action_space: torch.Tensor) -> Union[int, torch.Tensor]:
-        if self.playing:
+        if self.model_id == 'human':
             return self.decide_move_human(state, action_space)
+        elif self.model_id == 'heuristic':
+            return self.decide_move_heuristic(state, action_space)
         else:
             return self.decide_move_model(state, action_space)
         
@@ -152,7 +154,12 @@ class A2CAgent:
         print("Which action to take: ")
         answer = int(input())
         return answer, 1
-
+    
+    def decide_move_heuristic(self, state: torch.Tensor, action_space: torch.Tensor) -> Union[int, torch.Tensor]:
+        action_space = action_space.cpu().detach().numpy()
+        possible_actions = np.where(action_space == 1)[0] + 1
+        answer = heuristic_play(possible_actions, state)
+        return answer, 1
 
     def decide_move_model(self, state: torch.Tensor, action_space: torch.Tensor) -> Union[int, torch.Tensor]:
         if state is None:
@@ -268,22 +275,10 @@ class A2CAgent:
         for i in range(C.NUMBER_OF_AGENTS - 1):
             player_ground_truth = batch_next_actions[:, i]
             player_pred_logits = next_actions_pred_tuple[i]
-            print(torch.argmax(player_pred_logits, dim=1))
-            print(torch.argmax(player_ground_truth, dim=1))
-            print(torch.argmax(player_pred_logits, dim=1) == torch.argmax(player_ground_truth, dim=1))
             loss = F.cross_entropy(player_pred_logits, player_ground_truth) # Removed .mean() as cross_entropy averages by default
-            if torch.argmax(player_pred_logits) > 57:
-                print(player_ground_truth.clone().detach().cpu().numpy())
-                print(player_pred_logits.clone().detach().cpu().numpy())
-
-                print(player_ground_truth.size())
-                print(player_pred_logits.size())
-                assert False
-            
             total_loss += loss
 
         avg_loss = total_loss / num_players
-        
         self.optimizer_helper_model.zero_grad()
         avg_loss.backward()
         self.optimizer_helper_model.step()
