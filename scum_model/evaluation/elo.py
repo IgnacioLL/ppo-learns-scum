@@ -13,7 +13,7 @@ from collections import defaultdict
 
 from agent.a2c_agent import A2CAgent
 from agent.agent_pool import AgentPool
-from env.gymnasium_env import ScumEnv
+from environment.gymnasium_env import ScumEnv
 
 from config.constants import Constants as C
 

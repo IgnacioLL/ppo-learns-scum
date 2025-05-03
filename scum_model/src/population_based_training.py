@@ -81,7 +81,7 @@ class PopulationBasedTraining:
                     parameters = [model_params, rival_model_params, rival_model_params, rival_model_params, rival_model_params]
 
                 agent_pool = AgentPool(5, self.mongodb_manager)
-                agent_pool = agent_pool.create_agents_with_paths(parameters)
+                agent_pool = agent_pool.create_agents_with_parameters(parameters)
 
                 A2CScum(5, agent_pool, self.n_iter_against_another_model).learn(begin_episode, end_episode)
                 self._update_checkpoint(model_params, end_episode)

@@ -7,6 +7,7 @@ import random
 import uuid # Import uuid to generate unique game IDs
 import threading # Import threading for locking access to shared state
 import pymongo # Import pymongo
+from typing import List
 
 # --- Add project root to path ---
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), './'))
@@ -15,7 +16,7 @@ sys.path.append(project_root)
 
 try:
     from agent.agent_pool import AgentPool
-    from env.gymnasium_env import ScumEnv
+    from environment.gymnasium_env import ScumEnv
     from config.constants import Constants as C
     from db.db import MongoDBManager # Import the DB Manager
     import numpy as np
@@ -241,7 +242,7 @@ def start_game():
         local_env.player_turn = np.random.randint(0, 4)
         local_pool = AgentPool(num_agents=num_players)
         # Load your agent models as before...
-        local_pool = local_pool.create_agents_with_paths(
+        local_pool = local_pool.create_agents_with_parameters(
              {
                 'model_id': 'fb50b8c8-3848-4b5e-a144-5efb6a256dad',
                 'model_tag': 'testing',
@@ -323,9 +324,9 @@ def handle_action():
         print(f"Error: Game ID {game_id} not found in active games.")
         return jsonify({"error": "Game not found or already finished"}), 404
 
-    local_env = game_data['env']
-    local_pool = game_data['pool']
-    player_names = game_data['player_names'] # Retrieve player names
+    local_env: ScumEnv = game_data['env']
+    local_pool: AgentPool = game_data['pool']
+    player_names: List[str] = game_data['player_names'] # Retrieve player names
 
     try:
         current_player_turn = local_env.player_turn

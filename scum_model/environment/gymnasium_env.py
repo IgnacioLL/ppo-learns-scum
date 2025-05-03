@@ -78,11 +78,11 @@ class ScumEnv(gym.Env):
             done_agents[agent_number] = done
             episode_rewards[agent_number] += reward
             all_rewards[agent_number].append(reward)
-            if save_in_buffer:
+            if agent.training:
                 agent.buffer.save_in_buffer(current_state, reward, action_space, action, log_prob)
 
 
-        if save_in_buffer:
+        if agent.training:
             agent_pool.apply_discounted_returns_in_agents_buffer(all_rewards, discount)
             next_actions = self.get_next_actions_near_players()
             agent_pool.add_next_actions_in_agents_buffers(next_actions)
@@ -263,6 +263,7 @@ class ScumEnv(gym.Env):
             torch.tensor(cards_thrown, device=C.DEVICE),
             torch.tensor(action_taken, device=C.DEVICE),
             ])
+        
         return state.detach()
 
     def get_action_space(self) -> torch.Tensor:

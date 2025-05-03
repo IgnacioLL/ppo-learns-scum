@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 from agent.agent_pool import AgentPool
-from env.gymnasium_env import ScumEnv
+from environment.gymnasium_env import ScumEnv
 from config.constants import Constants as C
 
 from tqdm import tqdm

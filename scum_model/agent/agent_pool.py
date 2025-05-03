@@ -53,7 +53,7 @@ class AgentPool:
             self.agents.append(agent)
         return self
     
-    def create_agents_with_paths(self, list_of_params_agent: Union[List[Dict[str, Any]], Dict[str, Any]]):
+    def create_agents_with_parameters(self, list_of_params_agent: Union[List[Dict[str, Any]], Dict[str, Any]]):
         if isinstance(list_of_params_agent, list):
             self.agents = [A2CAgent(**params) for params in list_of_params_agent]
         elif isinstance(list_of_params_agent, dict):

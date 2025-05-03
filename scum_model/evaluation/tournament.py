@@ -4,7 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 from agent.agent_pool import AgentPool
 from config.constants import Constants as C
-from env.gymnasium_env import ScumEnv
+from environment.gymnasium_env import ScumEnv
 from db.db import MongoDBManager
 from utils import utils, db_utils
 import pandas as pd
@@ -73,7 +73,7 @@ class ScumTournament:
         agent_pools = []
         for group_params in model_params_groups:
             agent_pool = AgentPool(C.NUMBER_OF_AGENTS, self.mongodb_manager)
-            agent_pool = agent_pool.create_agents_with_paths(group_params)
+            agent_pool = agent_pool.create_agents_with_parameters(group_params)
             agent_pools.append(agent_pool)
         return agent_pools
 
