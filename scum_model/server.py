@@ -1,6 +1,12 @@
 # server.py
 import sys
 import os
+
+# --- Add project root to path ---
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), './'))
+sys.path.append(project_root)
+# --- End Path Addition ---
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import random
@@ -9,22 +15,12 @@ import threading # Import threading for locking access to shared state
 import pymongo # Import pymongo
 from typing import List
 
-# --- Add project root to path ---
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), './'))
-sys.path.append(project_root)
-# --- End Path Addition ---
+from agent.agent_pool import AgentPool
+from environment.gymnasium_env import ScumEnv
+from config.constants import Constants as C
+from db.db import MongoDBManager # Import the DB Manager
+import numpy as np
 
-try:
-    from agent.agent_pool import AgentPool
-    from environment.gymnasium_env import ScumEnv
-    from config.constants import Constants as C
-    from db.db import MongoDBManager # Import the DB Manager
-    import numpy as np
-except ImportError as e:
-    print(f"Error importing modules: {e}")
-    print("Ensure server.py is in the correct location relative to 'agent', 'env', 'config', 'utils', and 'MongoDBManager.py'")
-    print(f"Current sys.path: {sys.path}")
-    exit(1)
 
 app = Flask(__name__)
 CORS(app)

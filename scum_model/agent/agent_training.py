@@ -20,8 +20,6 @@ class AgentTraining:
         self.env = ScumEnv(number_players=number_of_agents)
         self.agent_pool = agent_pool
         self.total_steps = 0
-        self.ep_rewards = []
-        self.wins = []
         self.aggregate_stats_every = C.AGGREGATE_STATS_EVERY
         self.train_models_every = C.TRAIN_MODELS_EVERY
         self.create_checkpoint_every = create_checkpoint_every

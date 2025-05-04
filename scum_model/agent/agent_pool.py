@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from scum_model.agent.agent import Agent
+from agent.agent import Agent
 from typing import List, Dict, Any
 from config.constants import Constants as C
 from db.db import MongoDBManager

@@ -11,7 +11,7 @@ import heapq
 from collections import defaultdict
 
 
-from scum_model.agent.agent import Agent
+from agent.agent import Agent
 from agent.agent_pool import AgentPool
 from environment.gymnasium_env import ScumEnv
 
