@@ -26,6 +26,7 @@ class PopulationBasedTraining:
         self.n_iter_total = n_iter_total
         self.n_iter_against_another_model = n_iter_against_another_model
         self.number_of_models_in_parallel = number_of_models_in_parallel
+        self.total_round = self.n_iter_total // self.n_iter_against_another_model
         self.mongodb_manager = MongoDBManager(database="population-based-training")
         self.models_training = db_utils.extract_all_models_in_db(self.mongodb_manager) if models_training is None else models_training
 
@@ -64,8 +65,8 @@ class PopulationBasedTraining:
         self.mongodb_manager.insert_many(C.NAME_COLLECTION_CHECKPOINTS, data)
 
     def training(self, training_against_different_models: bool=False):
-        current_round = self.find_least_trained_agent()['current_episode'] // self.n_iter_against_another_model
-        for round in range(current_round, self.n_iter_total // self.n_iter_against_another_model):
+        current_round = self.determine_current_round()
+        for round in range(current_round, self.total_round):
             begin_episode = self.n_iter_against_another_model*round
             end_episode = self.n_iter_against_another_model*(round+1)
             
@@ -83,9 +84,12 @@ class PopulationBasedTraining:
                 agent_pool = AgentPool(5, self.mongodb_manager)
                 agent_pool = agent_pool.create_agents_with_parameters(parameters)
 
-                AgentTraining(5, agent_pool, self.n_iter_against_another_model).learn(begin_episode, end_episode)
+                agent_trainer = AgentTraining(5, agent_pool, self.n_iter_against_another_model)
+                agent_trainer.learn(begin_episode, end_episode)
                 self._update_checkpoint(model_params, end_episode)
-
+    
+    def determine_current_round(self):
+        return self.find_least_trained_agent()['current_episode'] // self.n_iter_against_another_model
 
     def _update_checkpoint(self, model_params, end_episode):
         path = f"{C.MODELS_PATH}model_{model_params['model_id']}_{str(end_episode)}.pt"
