@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Callable, Optional
 from collections import defaultdict
 
-from agent.a2c_agent import Agent
+from scum_model.agent.agent import Agent
 
 from agent_evaluation.elo import DynamicEloSystem
 

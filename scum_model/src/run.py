@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 
-from agent.a2c_scum import ScumTraining
+from scum_model.agent.agent_training import ScumTraining
 from agent.agent_pool import AgentPool
 from config.constants import Constants as C
 

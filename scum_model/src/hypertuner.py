@@ -25,7 +25,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 import torch
 import numpy as np
 
-from agent.a2c_scum import ScumTraining
+from scum_model.agent.agent_training import ScumTraining
 
 from config.constants import Constants as C
 

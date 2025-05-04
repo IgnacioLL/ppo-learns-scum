@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 import numpy as np
 
 from scipy.stats import loguniform
-from agent.a2c_scum import ScumTraining
+from scum_model.agent.agent_training import ScumTraining
 from agent.agent_pool import AgentPool
 from db.db import MongoDBManager
 from config.constants import Constants as C
