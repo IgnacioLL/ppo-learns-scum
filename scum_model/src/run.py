@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 
-from scum_model.agent.agent_training import ScumTraining
+from scum_model.agent.agent_training import AgentTraining
 from agent.agent_pool import AgentPool
 from config.constants import Constants as C
 
@@ -21,4 +21,4 @@ DEFAULT_HYPERPARAMS = {
 if __name__ == "__main__":
     agent_pool = AgentPool(5, None)
     agent_pool = agent_pool.create_agents_with_nnet_initialization(**DEFAULT_HYPERPARAMS)
-    ScumTraining(C.NUMBER_OF_AGENTS, agent_pool).learn(0, C.EPISODES)
+    AgentTraining(C.NUMBER_OF_AGENTS, agent_pool).learn(0, C.EPISODES)

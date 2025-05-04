@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 import numpy as np
 
 from scipy.stats import loguniform
-from scum_model.agent.agent_training import ScumTraining
+from scum_model.agent.agent_training import AgentTraining
 from agent.agent_pool import AgentPool
 from db.db import MongoDBManager
 from config.constants import Constants as C
@@ -83,7 +83,7 @@ class PopulationBasedTraining:
                 agent_pool = AgentPool(5, self.mongodb_manager)
                 agent_pool = agent_pool.create_agents_with_parameters(parameters)
 
-                ScumTraining(5, agent_pool, self.n_iter_against_another_model).learn(begin_episode, end_episode)
+                AgentTraining(5, agent_pool, self.n_iter_against_another_model).learn(begin_episode, end_episode)
                 self._update_checkpoint(model_params, end_episode)
 
 

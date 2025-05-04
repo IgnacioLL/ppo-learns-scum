@@ -25,7 +25,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 import torch
 import numpy as np
 
-from scum_model.agent.agent_training import ScumTraining
+from scum_model.agent.agent_training import AgentTraining
 
 from config.constants import Constants as C
 
@@ -97,7 +97,7 @@ def objective(trial: optuna.Trial, episodes=C.EPISODES) -> float:
     print("Entropy coefficient is: ", kwargs['entropy_coef'])
     
     try:
-        ScumTraining(**kwargs, callback=eval_callback).learn(total_episodes=episodes)
+        AgentTraining(**kwargs, callback=eval_callback).learn(total_episodes=episodes)
     except AssertionError as e:
         # Sometimes, random hyperparams can generate NaN.
         print(e)
