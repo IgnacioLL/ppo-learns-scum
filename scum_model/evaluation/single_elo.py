@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Callable, Optional
 from collections import defaultdict
 
-from agent.a2c_agent import A2CAgent
+from agent.a2c_agent import Agent
 
 from agent_evaluation.elo import DynamicEloSystem
 
@@ -39,7 +39,7 @@ class AgentTestingSystem(DynamicEloSystem):
         indices = [int(i * step) for i in range(num_opponents)]
         return [rated_agents[i][1] for i in indices]
     
-    def test_model(self, test_agent: A2CAgent,num_opponents: int = 5) -> pd.DataFrame:
+    def test_model(self, test_agent: Agent,num_opponents: int = 5) -> pd.DataFrame:
         """
         Test a single model against selected opponents
         

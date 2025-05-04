@@ -17,8 +17,7 @@ class Constants:
 
     EPISODES = 1_000_000
 
-    REWARD_CARD = 0.05
-    REWARD_PASS = 0
+
 
     REWARD_WIN = 1
     REWARD_SECOND = 0.25
@@ -27,7 +26,10 @@ class Constants:
     REWARD_LOSE = -1
     REWARD_CHOOSE_IMPOSIBLE_ACTION = 0
 
-    REWARD_EMPTY_HAND = 0.2
+    REWARD_EMPTY_HAND = 0
+    REWARD_CARD = 0
+    REWARD_PASS = 0
+
 
     DEVICE = (
         "cuda"
@@ -42,7 +44,7 @@ class Constants:
     WARMUP_STEPS = 150_000
     COOLER_STEPS = 1_000_000
     INITIAL_LR_FACTOR = 5
-    TRAIN_MODELS_EVERY = 5
+    TRAIN_MODELS_EVERY = 200
     N_EPOCH_PER_STEP = 6
 
     CREATE_CHECKPOINT_EVERY = 2_000

@@ -3,21 +3,21 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
-import gymnasium as gym
-from gymnasium import spaces
-import numpy as np
-
-from config.constants import Constants as C
-import torch
-from typing import List, Tuple, Dict
-from math import ceil
-import random
 import collections
+import gymnasium as gym
+import numpy as np
+import random
+import torch
 
-from utils.utils import move_to_last_position, convert_to_binary_tensor
-from utils import data_utils, env_utils
+from gymnasium import spaces
+
+from math import ceil
+
+from typing import List, Tuple
 
 from agent.agent_pool import AgentPool
+from config.constants import Constants as C
+from utils import data_utils, env_utils, utils
 
 class ScumEnv(gym.Env):
     def __init__(self, number_players):
@@ -25,7 +25,7 @@ class ScumEnv(gym.Env):
 
         self.number_players = number_players
         self.cards = self._deal_cards()
-        self.player_turn = 0    
+        self.player_turn = 0
         self.last_player = -1
         self.last_move = None
         self.players_in_game = [True] * self.number_players
@@ -42,18 +42,7 @@ class ScumEnv(gym.Env):
 
         self.cards_thrown = [0] * (C.NUMBER_OF_CARDS_PER_SUIT + 1)
         
-        # Define action and observation space
-        # For example, if you have discrete actions, use spaces.Discrete
-        self.action_space = spaces.Box(low=0, high=1, shape=(C.NUMBER_OF_POSSIBLE_STATES + self.number_players + C.NUMBER_OF_CARDS_PER_SUIT+1, ))  # Example: 0 or 1 actions
-        
-        # Define observation space (e.g., continuous or discrete states)
-        self.observation_space = spaces.Discrete(C.NUMBER_OF_POSSIBLE_STATES)
-        
-        # Set initial state
-        self.done = False
-
         self.winner_player = None
-
         self.current_pile = []
 
     def run_episode(self, agent_pool: AgentPool, discount: float, verbose=False, save_in_buffer=True):
@@ -100,7 +89,6 @@ class ScumEnv(gym.Env):
     def render(self, mode='human'):
         """Render the environment (optional)"""
         print(f"Current State: {self.cards}")
-
     
     def step(self, action: int, current_state: torch.Tensor):
         agent_number = self.player_turn
@@ -248,10 +236,10 @@ class ScumEnv(gym.Env):
         else:
             action_taken = [-1]
 
-        cards = convert_to_binary_tensor(self.cards[self.player_turn], pass_option=True)
+        cards = utils.convert_to_binary_tensor(self.cards[self.player_turn], pass_option=True)
 
         players_info = self.get_number_cards_x_person()
-        players_info = move_to_last_position(players_info, self.player_turn)
+        players_info = utils.move_to_last_position(players_info, self.player_turn)
         cards_thrown = self.get_cards_thrown()
 
         compact_action_space = data_utils.compact_form_of_states(action_space)
@@ -273,7 +261,7 @@ class ScumEnv(gym.Env):
             return self._get_cards_to_play_followup()
 
     def _get_cards_to_play_init(self) -> torch.Tensor:
-        return convert_to_binary_tensor(self.cards[self.player_turn], pass_option=False).detach() ## the pass action which is not available in the first move
+        return utils.convert_to_binary_tensor(self.cards[self.player_turn], pass_option=False).detach() ## the pass action which is not available in the first move
 
     def _get_cards_to_play_followup(self) -> torch.Tensor:
         n_cards = self.last_move[1]
@@ -287,7 +275,7 @@ class ScumEnv(gym.Env):
         else:
             cards = [cards for cards in possibilities if cards >= self.last_move[0]] + two_of_hearts
         cards = [cards if index == n_cards else [] for index in range(4)]
-        return convert_to_binary_tensor(cards, pass_option=True).detach() ## add the pass action
+        return utils.convert_to_binary_tensor(cards, pass_option=True).detach() ## add the pass action
 
     def get_number_cards_x_person(self) -> List[int]:
         return [self._compute_cards_x_player(cards_player[0]) for cards_player in self.cards]

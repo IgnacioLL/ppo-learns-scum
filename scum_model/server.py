@@ -487,12 +487,12 @@ def get_leaderboard():
         leaderboard_data = db_manager.find_many(
             collection='players',
             query={
-                'wins': {'$gt': 0},  # Optionally only show players with wins
+                'wins': {'$gt':-1},  # Optionally only show players with wins
                 'name': {'$nin': ['Player 1', 'Player 2', 'Player 3', 'Player 4']} # Exclude specific players
             },
             projection={'name': 1, 'wins': 1, '_id': 0},  # Get name and wins, exclude ID
             sort=[('wins', pymongo.DESCENDING)],  # Sort by wins descending
-            limit=20  # Limit to top 20 players
+            limit=10  # Limit to top 20 players
         )
         print(f"Fetched {len(leaderboard_data)} players for leaderboard.")
         return jsonify(leaderboard_data)

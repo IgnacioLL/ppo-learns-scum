@@ -11,7 +11,7 @@ import heapq
 from collections import defaultdict
 
 
-from agent.a2c_agent import A2CAgent
+from agent.a2c_agent import Agent
 from agent.agent_pool import AgentPool
 from environment.gymnasium_env import ScumEnv
 
@@ -107,7 +107,7 @@ class DynamicEloSystem:
                     'uncertainty': 1.0
                 }
 
-            self.agents.append(A2CAgent(**agent_params))
+            self.agents.append(Agent(**agent_params))
             self.available_models = agent_params['model_id']
             
 
@@ -138,7 +138,7 @@ class DynamicEloSystem:
                 _, _, model_b = heapq.heappop(model_data)
                 
                 # Check if this pair is already playing
-                # TODO: Add the __lt__ method in A2CAgent using the id which will also need to be added.
+                # TODO: Add the __lt__ method in Agent using the id which will also need to be added.
                 pair = tuple(sorted([model_a, model_b]))
                 if pair not in self.active_matches:
                     matches.append(pair)

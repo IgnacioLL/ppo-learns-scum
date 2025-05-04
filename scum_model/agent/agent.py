@@ -28,7 +28,7 @@ from agent.heuristic_player import heuristic_play
 from typing import Union, Tuple
 
 
-class A2CAgent:
+class Agent:
     def __init__(
             self,
             model_id, 
@@ -130,7 +130,7 @@ class A2CAgent:
                 self.wins.clear()
                 
         except Exception as e:
-            print(f"Error during A2CAgent cleanup: {e}")
+            print(f"Error during Agent cleanup: {e}")
 
     def set_training(self, set_to_train: bool) -> None:
         self.training = set_to_train

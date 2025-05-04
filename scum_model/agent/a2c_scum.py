@@ -9,7 +9,7 @@ from config.constants import Constants as C
 from tqdm import tqdm
 import argparse
 
-class A2CScum:
+class ScumTraining:
     def __init__(
             self,
             number_of_agents,
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    model = A2CScum(number_of_agents=5, load_checkpoints=False, episodes=C.EPISODES)
+    model = ScumTraining(number_of_agents=5, load_checkpoints=False, episodes=C.EPISODES)
     model.learn()
 
     

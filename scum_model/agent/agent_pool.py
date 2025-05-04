@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from agent.a2c_agent import A2CAgent
+from scum_model.agent.agent import Agent
 from typing import List, Dict, Any
 from config.constants import Constants as C
 from db.db import MongoDBManager
@@ -30,10 +30,10 @@ class AgentPool:
         except Exception as e:
             print(f"Error during AgentPool cleanup: {e}")
 
-    def get_agent(self, agent_number: int) -> A2CAgent:
+    def get_agent(self, agent_number: int) -> Agent:
         return self.agents[agent_number]
 
-    def set_agent(self, agent: A2CAgent, agent_number: int = 0) -> None:
+    def set_agent(self, agent: Agent, agent_number: int = 0) -> None:
         self.agents[agent_number] = agent
 
     def randomize_order(self):
@@ -45,19 +45,19 @@ class AgentPool:
             if self.agents[agent_number].training:
                 return agent_number
 
-    def create_agents_with_nnet_initialization(self, **model_params) -> List[A2CAgent]:
-        training_agent = A2CAgent(**model_params, training=True)
+    def create_agents_with_nnet_initialization(self, **model_params) -> List[Agent]:
+        training_agent = Agent(**model_params, training=True)
         self.agents = [training_agent]
         for i in range(1, self.number_of_agents):
-            agent = A2CAgent(**model_params)
+            agent = Agent(**model_params)
             self.agents.append(agent)
         return self
     
     def create_agents_with_parameters(self, list_of_params_agent: Union[List[Dict[str, Any]], Dict[str, Any]]):
         if isinstance(list_of_params_agent, list):
-            self.agents = [A2CAgent(**params) for params in list_of_params_agent]
+            self.agents = [Agent(**params) for params in list_of_params_agent]
         elif isinstance(list_of_params_agent, dict):
-            self.agents = [A2CAgent(**list_of_params_agent) for _ in range(self.number_of_agents)]
+            self.agents = [Agent(**list_of_params_agent) for _ in range(self.number_of_agents)]
         return self
 
     def apply_discounted_returns_in_agents_buffer(self, episode_rewards, discount):
