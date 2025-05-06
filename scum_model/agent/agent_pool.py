@@ -94,6 +94,16 @@ class AgentPool:
             if self.get_agent(agent_number).training:
                 self.get_agent(agent_number).flush_average_win_rate_to_tensorboard(n_episodes, episode)
 
+    def flush_average_reward_to_parquet_from_each_agent(self, n_episodes, episode):
+        for agent_number in range(self.number_of_agents):
+            if self.get_agent(agent_number).training:
+                self.get_agent(agent_number).flush_average_reward_to_parquet(n_episodes, episode)
+
+    def flush_win_rate_to_parquet_from_each_agent(self, n_episodes, episode):
+        for agent_number in range(self.number_of_agents):
+            if self.get_agent(agent_number).training:
+                self.get_agent(agent_number).flush_average_win_rate_to_parquet(n_episodes, episode)
+
     def extract_wins_agents(self):
         agents_wins = {}
         for agent_number in range(self.number_of_agents):

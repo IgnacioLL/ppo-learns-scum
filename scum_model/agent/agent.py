@@ -44,7 +44,9 @@ class Agent:
             policy_error_coef=1, 
             entropy_coef=0, 
             epochs=C.N_EPOCH_PER_STEP,
-            current_episode=0
+            batch_size=C.BATCH_SIZE,
+            current_episode=0,
+            clip=0.2
             ):
         self.model_id = model_id
         self.model_tag = model_tag
@@ -70,6 +72,8 @@ class Agent:
 
 
             self.learning_rate = learning_rate
+            self.clip = clip
+            self.batch_size = batch_size
             self.initial_learning_rate = self.learning_rate * C.INITIAL_LR_FACTOR
             self.current_learning_rate = self.initial_learning_rate
             self.discount = discount
@@ -200,6 +204,7 @@ class Agent:
         
         avg_metrics = logging.average_metrics(metrics)
         logging.flush_performance_stats_tensorboard(self.writer, avg_metrics, episode)
+        logging.flush_performance_stats_parquet(f"./metrics/{self.model_id}/{self.model_id}_performance_stats.parquet", avg_metrics, episode)
 
     def train_on_batch(self, batch_data, epoch):
         batch_states, batch_returns, batch_action_space, batch_action, batch_old_log_prob, batch_next_actions = batch_data
@@ -223,7 +228,7 @@ class Agent:
         else:
             advantadge_norm = (advantadge - advantadge.mean()) / (advantadge.std() + 1e-10)
 
-        policy_loss, ratio = loss_utils.compute_policy_error_with_clipped_surrogate(log_prob, batch_old_log_prob, advantadge_norm)
+        policy_loss, ratio = loss_utils.compute_policy_error_with_clipped_surrogate(log_prob, batch_old_log_prob, advantadge_norm, self.clip)
         value_loss = F.mse_loss(value_preds, batch_returns, reduction='none')
         entropy = loss_utils.compute_entropy(masked_policy_probs, log_prob)
 
@@ -333,3 +338,11 @@ class Agent:
     def flush_average_reward_to_tensorboard(self, n_episodes, episode):
         average_reward = self.get_average_reward_last_n_episodes(n_episodes)
         logging.flush_average_reward_to_tensorboard(self.writer, average_reward, episode)
+
+    def flush_average_win_rate_to_parquet(self, n_episodes, episode):
+        win_rate = self.get_win_rate_last_n_episodes(n_episodes)
+        logging.flush_average_win_rate_to_parquet(f"./metrics/{self.model_id}/{self.model_id}_avg_win_rate.parquet", win_rate, episode)
+
+    def flush_average_reward_to_parquet(self, n_episodes, episode):
+        average_reward = self.get_average_reward_last_n_episodes(n_episodes)
+        logging.flush_average_reward_to_parquet(f"./metrics/{self.model_id}/{self.model_id}_avg_reward.parquet", average_reward, episode)

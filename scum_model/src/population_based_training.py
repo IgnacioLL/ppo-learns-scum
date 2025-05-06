@@ -3,13 +3,14 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 import numpy as np
+import uuid
 
 from scipy.stats import loguniform
 from agent.agent_training import AgentTraining
 from agent.agent_pool import AgentPool
-from db.db import MongoDBManager
 from config.constants import Constants as C
-import uuid
+from db.db import MongoDBManager
+from evaluation.tournament import ScumTournament
 from utils import db_utils
 
 from typing import Dict, Any, List
@@ -19,6 +20,7 @@ class PopulationBasedTraining:
             self,
             n_iter_total=C.N_ITER_TOTAL,
             n_iter_against_another_model=C.N_ITER_AGAINST_ANOTHER_MODEL,
+            pruning_rounds=C.PRUNING_ROUNDS,
             number_of_models_in_parallel=C.NUMBER_OF_MODELS_IN_PARALLEL,
             models_training: List[str]=None
             ):
@@ -27,28 +29,21 @@ class PopulationBasedTraining:
         self.n_iter_against_another_model = n_iter_against_another_model
         self.number_of_models_in_parallel = number_of_models_in_parallel
         self.total_round = self.n_iter_total // self.n_iter_against_another_model
+        self.pruning_rounds = pruning_rounds
         self.mongodb_manager = MongoDBManager(database="population-based-training")
         self.models_training = db_utils.extract_all_models_in_db(self.mongodb_manager) if models_training is None else models_training
 
-    def generate_params(self):
-        params = {
-            "learning_rate": loguniform.rvs(5e-6, 5e-4),
-            "model_size": np.random.choice(['large-sep-arch']), 
-            "policy_error_coef": np.random.uniform(0.75, 1.25),
-            "value_error_coef": np.random.uniform(0.75, 1.25), # The advantadge is of low magnitude
-            "entropy_coef": np.random.uniform(0, 0.3),
-            "current_episode": 0,
-            'load_model_path': None, 
-        }
-        params['model_id'] = str(uuid.uuid4())
-        params['model_tag'] = str(round(params['learning_rate'], 5)) + "-" + params['model_size'] + '-' + str(round(params['policy_error_coef'],2)) + '-' + str(round(params['value_error_coef'], 2)) + '-' + str(round(params['entropy_coef'], 2))
-        return params
 
-    def initialize_training(self):
+    def initialize_training_with_reinitialization(self, number_of_new_models: int=C.NUMBER_OF_MODELS_IN_PARALLEL):
+        self._drop_collections_training()
+        self.initialize_training(number_of_new_models)
+
+    def _drop_collections_training(self):
         self.mongodb_manager.drop_collection(C.NAME_COLLECTION_CHECKPOINTS)
         self.mongodb_manager.drop_collection(C.NAME_COLLECTION_MODELS_PARAMS)
 
-        list_of_params = [self.generate_params() for _ in range(self.number_of_models_in_parallel)]
+    def initialize_training(self, number_of_new_models: int=C.NUMBER_OF_MODELS_IN_PARALLEL):
+        list_of_params = [self._generate_params() for _ in range(number_of_new_models)]
         self.mongodb_manager.insert_many(C.NAME_COLLECTION_MODELS_PARAMS, list_of_params)
         
         data =  [
@@ -63,6 +58,30 @@ class PopulationBasedTraining:
         ]
         
         self.mongodb_manager.insert_many(C.NAME_COLLECTION_CHECKPOINTS, data)
+        self.models_training = self.models_training + [params['model_id'] for params in list_of_params]
+
+
+    def _generate_params(self):
+        params = {
+            "learning_rate": float(loguniform.rvs(1e-5, 1e-3)),
+            "model_size": np.random.choice([
+                'large-sep-arch', 'big-sep-arch', 'medium-sep-arch', 'small-sep-arch', 
+                'large', 'big', 'medium', 'small']), 
+            "policy_error_coef": float(loguniform.rvs(0.1, 10)),
+            "value_error_coef": 1, # The advantadge is of low magnitude
+            "entropy_coef": float(loguniform.rvs(1e-7, 1.5)),
+            "current_episode": 0,
+            'load_model_path': None,
+            'clip': float(loguniform.rvs(0.05, 0.5)),
+            'epochs': int(np.random.randint(1, 25)),
+            'batch_size': int(np.random.choice([8, 16, 32, 64, 128, 512], p= [0.1, 0.1, 0.3, 0.3, 0.1, 0.1])),
+            'discount': float(loguniform.rvs(0.95, 0.99999)),
+            'pruned': False,
+        }
+        params['model_id'] = str(uuid.uuid4())
+        params['model_tag'] = str(round(params['learning_rate'], 5)) + "-" + params['model_size'] + '-' + str(round(params['policy_error_coef'],2)) + '-' + str(round(params['value_error_coef'], 2)) + '-' + str(round(params['entropy_coef'], 2))
+        return params
+
 
     def training(self, training_against_different_models: bool=False):
         current_round = self.determine_current_round()
@@ -71,6 +90,9 @@ class PopulationBasedTraining:
             end_episode = self.n_iter_against_another_model*(round+1)
             
             number_of_models_in_current_round = self.find_number_agents_in_round()
+            if number_of_models_in_current_round == self.number_of_models_in_parallel and round in self.pruning_rounds:
+                print(f"Pruning round {round}")
+                self.prune()
             print(f"Number of models still in round {number_of_models_in_current_round}")
             for _ in range(number_of_models_in_current_round):
                 model_params = self.find_least_trained_agent()
@@ -87,6 +109,22 @@ class PopulationBasedTraining:
                 agent_trainer = AgentTraining(5, agent_pool, self.n_iter_against_another_model)
                 agent_trainer.learn(begin_episode, end_episode)
                 self._update_checkpoint(model_params, end_episode)
+
+    def prune(self) -> None:
+        tournament = ScumTournament(self.mongodb_manager)
+        tournament.play_tournament(50, 10)
+        leaderboard = tournament.get_leaderboard()
+        models_to_prune_ids = leaderboard.tail(5)['model_id'].to_list()
+
+        prune_query = {'model_id': {'$in': models_to_prune_ids}}
+        update_data = {'$set': {'pruned': True}}
+        self.mongodb_manager.update_many(
+            collection=C.NAME_COLLECTION_MODELS_PARAMS,
+            query=prune_query,
+            update=update_data
+        )
+
+        
     
     def determine_current_round(self):
         return self.find_least_trained_agent()['current_episode'] // self.n_iter_against_another_model
@@ -104,12 +142,13 @@ class PopulationBasedTraining:
 
 
     def find_least_trained_agent(self) -> Dict[str, Any]:
-        list_of_params = self.mongodb_manager.find_many(C.NAME_COLLECTION_MODELS_PARAMS)
+        list_of_params = self.mongodb_manager.find_many(C.NAME_COLLECTION_MODELS_PARAMS, query={'pruned': False})
         list_of_params = [model_params for model_params in list_of_params if model_params['model_id'] in self.models_training]
         min_episode = min([params["current_episode"] for params in list_of_params])
         model_params = [params for params in list_of_params if params["current_episode"] == min_episode]
         model_param: Dict = np.random.choice(model_params)
         model_param.pop('_id')
+        model_param.pop('pruned')
         model_param['training'] = True
         return model_param
     
@@ -152,13 +191,14 @@ class PopulationBasedTraining:
         
 
 if __name__ == '__main__':
-    models_id = [
-        "fb50b8c8-3848-4b5e-a144-5efb6a256dad",
-        "5e09f893-fb82-463e-8eea-4c9f5b429448",
-        "f8400821-9a91-49e3-b5e4-69d7ab0791ff",
-        "631941e3-f3db-438e-9ca4-12605fd0423c",
-        "c401ab2d-0403-4468-af57-aea518cf56cc"
-    ]
-    pbt = PopulationBasedTraining(600_000, 50_000, 5, models_id)
+    # models_id = [
+    #     "fb50b8c8-3848-4b5e-a144-5efb6a256dad",
+    #     "5e09f893-fb82-463e-8eea-4c9f5b429448",
+    #     "f8400821-9a91-49e3-b5e4-69d7ab0791ff",
+    #     "631941e3-f3db-438e-9ca4-12605fd0423c",
+    #     "c401ab2d-0403-4468-af57-aea518cf56cc"
+    # ]
+    pbt = PopulationBasedTraining(600_000, 5_000, 30)
+    pbt.initialize_training_with_reinitialization(30)
     pbt.training(True)
         

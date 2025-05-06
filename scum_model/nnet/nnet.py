@@ -71,12 +71,15 @@ class NNet(nn.Module):
             nn.Linear(FINAL_DIM_INPUT, neurons),
             nn.LayerNorm(neurons),
             nn.LeakyReLU(),
+            nn.Dropout(0.2),
             nn.Linear(neurons, neurons*2),
             nn.LayerNorm(neurons*2),
             nn.LeakyReLU(),
+            nn.Dropout(0.2),
             nn.Linear(neurons*2, neurons),
             nn.LayerNorm(neurons),
             nn.LeakyReLU(), 
+            nn.Dropout(0.2),
             nn.Linear(neurons, neurons // 4),
             nn.LeakyReLU(), 
             nn.Linear(neurons // 4, 1)
@@ -86,11 +89,14 @@ class NNet(nn.Module):
             nn.Linear(FINAL_DIM_INPUT, neurons),
             nn.LayerNorm(neurons),
             nn.LeakyReLU(),
+            nn.Dropout(0.2),
             nn.Linear(neurons, neurons*2),
             nn.LayerNorm(neurons*2),
+            nn.Dropout(0.2),
             nn.LeakyReLU(),
             nn.Linear(neurons*2, neurons),
             nn.LayerNorm(neurons),
+            nn.Dropout(0.2),
             nn.LeakyReLU(), 
             nn.Linear(neurons, C.NUMBER_OF_POSSIBLE_STATES)
         )
@@ -101,6 +107,7 @@ class NNet(nn.Module):
             nn.Linear(FINAL_DIM_INPUT, neurons),
             nn.LayerNorm(neurons),
             nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(neurons, neurons*2),
             nn.LayerNorm(neurons*2),
             nn.ReLU()

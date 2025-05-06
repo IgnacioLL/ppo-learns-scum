@@ -41,6 +41,9 @@ class AgentTraining:
                 self.agent_pool.flush_average_reward_to_tensorboard_from_each_agent(self.aggregate_stats_every, episode)
                 self.agent_pool.flush_win_rate_to_tensorboard_from_each_agent(self.aggregate_stats_every, episode)
             
+                self.agent_pool.flush_average_reward_to_parquet_from_each_agent(self.aggregate_stats_every, episode)
+                self.agent_pool.flush_win_rate_to_parquet_from_each_agent(self.aggregate_stats_every, episode)
+            
             if episode % self.create_checkpoint_every == 0:
                 self.agent_pool.save_models(episode)
 

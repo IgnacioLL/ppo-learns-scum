@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import uuid
 import random
+from typing import Dict, Any
 from torch.utils.tensorboard import SummaryWriter
 
 def initialize_metrics():
@@ -43,8 +44,8 @@ def accumulate_metrics(total_metrics, batch_metrics):
             total_metrics[key]['count'] += 1
 
 
-def average_metrics(metrics):
-    return {key: value['total']/value['count'] for key, value in metrics.items()}
+def average_metrics(metrics: Dict[str, Dict[str, float]]) -> Dict[str, float]:
+    return {key: value['total'] / value['count'] for key, value in metrics.items()}
 
 
 def get_gradient_stats(model):
@@ -117,3 +118,33 @@ def flush_average_reward_to_tensorboard(writer: SummaryWriter, average_reward: f
 def flush_average_win_rate_to_tensorboard(writer: SummaryWriter, win_rate: float, episode: int):
     win_rate_formatted = {"Win Rate": win_rate}
     flush_performance_stats_tensorboard(writer, win_rate_formatted, episode)
+
+
+def flush_performance_stats_parquet(file_path: str, performance_stats: Dict[str, Any], episode: int) -> None:
+    directory = os.path.dirname(file_path)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)
+
+    data = {'episode': [episode]}
+    data.update({key: [value] for key, value in performance_stats.items()})
+    new_data_df = pd.DataFrame(data)
+
+    # Check if the file exists and append or create
+    if os.path.exists(file_path):
+        # Read the existing data
+        existing_df = pd.read_parquet(file_path)
+        # Append the new data
+        updated_df = pd.concat([existing_df, new_data_df], ignore_index=True)
+        # Write the updated DataFrame back to the Parquet file
+        updated_df.to_parquet(file_path, index=False)
+    else:
+        # If the file doesn't exist, write the new data directly
+        new_data_df.to_parquet(file_path, index=False)
+
+def flush_average_reward_to_parquet(file_path: str, average_reward: float, episode: int):
+    average_rewards_format = {"Avg Reward": average_reward}
+    flush_performance_stats_parquet(file_path, average_rewards_format, episode)
+
+def flush_average_win_rate_to_parquet(file_path: str, win_rate: float, episode: int):
+    win_rate_formatted = {"Win Rate": win_rate}
+    flush_performance_stats_parquet(file_path, win_rate_formatted, episode)
