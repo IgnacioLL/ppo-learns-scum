@@ -14,7 +14,6 @@ from torch.utils.tensorboard import SummaryWriter
 from config.constants import Constants as C
 
 import numpy as np
-import pandas as pd
 
 import torch.nn as nn
 
@@ -180,14 +179,34 @@ class Agent:
             action = prediction_masked.sample()
             
             log_prob = prediction_masked.log_prob(action)
+            
             return action.item() + 1, log_prob    ## esto devolvera un valor entre 1 y 57 que sera la eleccion del modelo
 
     @torch.no_grad()
     def predict(self, state):
-        latent_space, _ = self.helper_model.forward(state)
-        _, probs = self.model.forward(state, latent_space.detach().clone())
-        return probs.detach().clone()  # Explicitly detach and clone
+        self.model.eval()
+        self.helper_model.eval()
+        try:
+            latent_space, _ = self.helper_model.forward(state)
+            _, probs = self.model.forward(state, latent_space.detach().clone())
+            return probs.detach().clone()  # Explicitly detach and clone
+        finally:
+            self.model.train()
+            self.helper_model.train()
 
+    @torch.no_grad()
+    def predict_value_and_probs(self, state):
+        # Set models to evaluation mode
+        self.model.eval()
+        self.helper_model.eval()
+        
+        try:
+            latent_space, _ = self.helper_model.forward(state)
+            value_pred, probs = self.model.forward(state, latent_space.detach().clone())
+            return value_pred.detach().clone(), probs.detach().clone()
+        finally:
+            self.model.train()
+            self.helper_model.train()
 
     def train(self, episode, batch_size=32):
         metrics = logging.initialize_metrics()
@@ -248,7 +267,6 @@ class Agent:
         self.optimizer.step()
         self.scheduler.step()
 
-        ratio_5th_epoch = torch.abs(ratio - 1).mean().item() if epoch == 4 else None
 
         return {
             'loss_value': value_loss.item() * self.value_error_coef,
@@ -259,7 +277,6 @@ class Agent:
             'returns': batch_returns.mean().item(),
             'ratio': (ratio - 1).mean().item(),
             'ratio_abs': torch.abs(ratio - 1).mean().item(),
-            'ratio_5th_epoch': ratio_5th_epoch,
             'ratio_max_change': (ratio - 1).max().item(), 
             'ratio_min_change': (ratio - 1).min().item(), 
             **gradient_stats,

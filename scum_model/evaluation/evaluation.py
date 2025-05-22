@@ -27,8 +27,8 @@ def evaluate(rounds, parameters, verbose=False):
 
 if __name__ == '__main__':
     mongodb_manager = MongoDBManager(database="population-based-training")
-    model_id = "fb50b8c8-3848-4b5e-a144-5efb6a256dad"
-    run = 60_000
+    model_id = "4efbec94-219a-4f7b-8805-8be90487019f"
+    run = 200_000
     model_param = mongodb_manager.find_one(C.NAME_COLLECTION_CHECKPOINTS, query={'model_id': model_id, 'current_episode': run})
     model_param.pop('_id')
 
@@ -39,4 +39,4 @@ if __name__ == '__main__':
         {'model_id': 'heuristic', 'model_size': 'heuristic', 'model_tag': 'heuristic'},
         model_param
         ]
-    evaluate(5_000, parameters)
+    evaluate(1_000, parameters)

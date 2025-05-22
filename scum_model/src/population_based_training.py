@@ -90,11 +90,11 @@ class PopulationBasedTraining:
             end_episode = self.n_iter_against_another_model*(round+1)
             
             number_of_models_in_current_round = self.find_number_agents_in_round()
-            if number_of_models_in_current_round == self.number_of_models_in_parallel and round in self.pruning_rounds:
-                print(f"Pruning round {round}")
-                self.prune()
-            print(f"Number of models still in round {number_of_models_in_current_round}")
-            for _ in range(number_of_models_in_current_round):
+            print(f"Number of models in current round: {number_of_models_in_current_round}")
+            for n_iter in range(number_of_models_in_current_round):
+                if (n_iter == (number_of_models_in_current_round - 1)) & (begin_episode in self.pruning_rounds):
+                    print(f"Pruning round {round}")
+                    self.prune()
                 model_params = self.find_least_trained_agent()
                 if training_against_different_models:
                     rivals_model_params = self.find_worth_table(model_params)
@@ -111,9 +111,11 @@ class PopulationBasedTraining:
                 self._update_checkpoint(model_params, end_episode)
 
     def prune(self) -> None:
-        tournament = ScumTournament(self.mongodb_manager)
+        params = self.mongodb_manager.find_many(C.NAME_COLLECTION_MODELS_PARAMS, query={'pruned': False})
+        models_ids = [model_params['model_id'] for model_params in params]
+        tournament = ScumTournament(self.mongodb_manager, models=models_ids)
         tournament.play_tournament(50, 10)
-        leaderboard = tournament.get_leaderboard()
+        leaderboard = tournament.get_leaderboard().reset_index(names=["model_id"])
         models_to_prune_ids = leaderboard.tail(5)['model_id'].to_list()
 
         prune_query = {'model_id': {'$in': models_to_prune_ids}}
@@ -153,7 +155,7 @@ class PopulationBasedTraining:
         return model_param
     
     def find_number_agents_in_round(self) -> Dict[str, Any]:
-        list_of_params = self.mongodb_manager.find_many(C.NAME_COLLECTION_MODELS_PARAMS)
+        list_of_params = self.mongodb_manager.find_many(C.NAME_COLLECTION_MODELS_PARAMS, query={'pruned': False})
         list_of_params = [model_params for model_params in list_of_params if model_params['model_id'] in self.models_training]
 
         min_episode = min([params["current_episode"] for params in list_of_params])
@@ -191,14 +193,6 @@ class PopulationBasedTraining:
         
 
 if __name__ == '__main__':
-    # models_id = [
-    #     "fb50b8c8-3848-4b5e-a144-5efb6a256dad",
-    #     "5e09f893-fb82-463e-8eea-4c9f5b429448",
-    #     "f8400821-9a91-49e3-b5e4-69d7ab0791ff",
-    #     "631941e3-f3db-438e-9ca4-12605fd0423c",
-    #     "c401ab2d-0403-4468-af57-aea518cf56cc"
-    # ]
-    pbt = PopulationBasedTraining(600_000, 5_000, 30)
-    pbt.initialize_training_with_reinitialization(30)
+    pbt = PopulationBasedTraining(600_000, 5_000, number_of_models_in_parallel=30)
     pbt.training(True)
         

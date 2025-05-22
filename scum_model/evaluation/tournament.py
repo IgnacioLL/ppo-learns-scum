@@ -19,7 +19,7 @@ class ScumTournament:
         self.env = ScumEnv(C.NUMBER_OF_AGENTS)
         self.mongodb_manager = mongodb_manager
         self.models = db_utils.extract_all_models_in_db(mongodb_manager) if models is None else models
-        if len(models) != 1:
+        if len(self.models) != 1:
             self.leaderboard = self._initialize_leaderboard_different_models()
         else:
             self.leaderboard = self._initialize_leaderboard_same_model(models[0], runs)
@@ -42,10 +42,12 @@ class ScumTournament:
     def play_tournament(self, n_rounds, n_episodes_x_round):
         for _ in tqdm(range(n_rounds), ascii=True, unit=' rounds'):
             self.play_round(n_episodes_x_round)
-
+        return self
+    
     def play_tournament_against_own_model(self, n_rounds, n_episodes_x_round, **same_model_kwargs):
         for _ in tqdm(range(n_rounds), ascii=True, unit=' rounds'):
-            self.play_round(n_episodes_x_round, True, **same_model_kwargs)    
+            self.play_round(n_episodes_x_round, True, **same_model_kwargs)
+        return self
 
     def play_round(self, episodes, same_model=False, **same_model_kwargs):
         utils.log_vram_memory("Before make agent pools")

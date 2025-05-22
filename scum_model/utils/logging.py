@@ -16,7 +16,6 @@ def initialize_metrics():
         'returns': {'total': 0, 'count': 0},
         'ratio': {'total': 0, 'count': 0},
         'ratio_abs': {'total': 0, 'count': 0},
-        'ratio_5th_epoch': {'total': 0, 'count': 0},
         'ratio_max_change': {'total': 0, 'count': 0},
         'ratio_min_change': {'total': 0, 'count': 0},
         'mean_gradient': {'total': 0, 'count': 0},
@@ -45,8 +44,10 @@ def accumulate_metrics(total_metrics, batch_metrics):
 
 
 def average_metrics(metrics: Dict[str, Dict[str, float]]) -> Dict[str, float]:
-    return {key: value['total'] / value['count'] for key, value in metrics.items()}
-
+    try:
+        return {key: value['total'] / value['count'] for key, value in metrics.items()}
+    except ZeroDivisionError:
+        return {key: 0 for key in metrics.keys()}
 
 def get_gradient_stats(model):
     median_grad, mean_grad, max_grad, min_grad, p99_grad, p01_grad = compute_grad_stats(model)

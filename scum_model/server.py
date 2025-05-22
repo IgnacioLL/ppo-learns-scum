@@ -21,6 +21,11 @@ from config.constants import Constants as C
 from db.db import MongoDBManager # Import the DB Manager
 import numpy as np
 
+from utils import data_utils, env_utils
+import torch
+from torch.distributions import Categorical
+import torch.nn.functional as F
+
 
 app = Flask(__name__)
 CORS(app)
@@ -165,19 +170,30 @@ def find_action_index(env: ScumEnv, cards_to_play: list) -> int:
 
     action_space_tensor = env.get_action_space()
     internal_card_number = card_value
-    if internal_card_number == 0:
-        internal_card_number = C.NUMBER_OF_CARDS_PER_SUIT + 1
-    action_index = (n_cards_index * (C.NUMBER_OF_CARDS_PER_SUIT + 1) + (internal_card_number -1))
+    if card_value == 14:
+        action_index = _handle_two_of_hearts(env)
+    else:
+        if internal_card_number == 0:
+            internal_card_number = C.NUMBER_OF_CARDS_PER_SUIT + 1
+        action_index = (n_cards_index * (C.NUMBER_OF_CARDS_PER_SUIT + 1) + (internal_card_number -1))
 
-    # Action index in env.step is 1-based, tensor is 0-based
-    # Check if the calculated index (0-based) is valid in the tensor
     if action_index < len(action_space_tensor) and action_space_tensor[action_index] > 0:
-         # print(f"[Action Conversion] Found valid action index: {action_index + 1} for {n_cards}x card {card_value}")
          return action_index + 1 # Return 1-based index for env.step
     else:
          print(f"[Action Conversion] Error: Move {n_cards} x card {card_value} (index {action_index}) not found/valid in action space.")
-         # print(f"Action space tensor (first 60): {action_space_tensor[:60]}") # Debug if needed
          return -1
+
+def _handle_two_of_hearts(env: ScumEnv) -> int:
+    action_space_tensor = env.get_action_space()
+    indices = torch.where(action_space_tensor == 1)[0]
+
+    print("Action space tensor: ", action_space_tensor)
+    print("Indices: ", indices)
+
+    action_index = indices[torch.where(indices % 14 == 13)[0].item()]
+    if len(indices) > 0:
+        return action_index
+    return -1
 
 def get_pass_action_index(env: ScumEnv) -> int:
     """Gets the action index corresponding to 'pass'."""
@@ -187,7 +203,6 @@ def get_pass_action_index(env: ScumEnv) -> int:
 
     action_space_tensor = env.get_action_space()
     if pass_index_0_based < len(action_space_tensor) and action_space_tensor[pass_index_0_based] > 0:
-        # print(f"[Action Conversion] Found valid pass action index: {pass_index_1_based}")
         return pass_index_1_based # Return 1-based index
     else:
         print(f"[Action Conversion] Error: Pass action (index {pass_index_0_based}) not found/valid in action space.")
@@ -240,10 +255,10 @@ def start_game():
         # Load your agent models as before...
         local_pool = local_pool.create_agents_with_parameters(
              {
-                'model_id': 'fb50b8c8-3848-4b5e-a144-5efb6a256dad',
+                'model_id': '4efbec94-219a-4f7b-8805-8be90487019f',
                 'model_tag': 'testing',
                 'model_size': 'large-sep-arch',
-                'load_model_path': './models/model_fb50b8c8-3848-4b5e-a144-5efb6a256dad_240000.pt'
+                'load_model_path': './models/model_4efbec94-219a-4f7b-8805-8be90487019f_200000.pt'
                 }
         )
 
@@ -284,7 +299,6 @@ def start_game():
         # --- Prepare and send initial state (using player_names) ---
         initial_state = get_game_state_for_ui(local_env, player_names, message="Game started.")
         initial_state['gameId'] = game_id # Add game_id to the response
-        print(f"--- Game [{game_id}] Sending initial state to UI (Player {initial_state.get('currentPlayerIndex')}'s turn) ---")
         return jsonify(initial_state)
 
     except Exception as e:
@@ -296,8 +310,6 @@ def start_game():
 # --- /game/action Modification ---
 @app.route('/game/action', methods=['POST'])
 def handle_action():
-    print("\n--- Received request to /game/action ---")
-
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid request body"}), 400
@@ -308,8 +320,6 @@ def handle_action():
     if not game_id:
         print("Error: Missing gameId in request.")
         return jsonify({"error": "Missing gameId"}), 400
-
-    print(f"Request for Game ID: {game_id}, Action Type: {action_type}")
 
     # --- Retrieve the specific game instance ---
     game_data = None
@@ -326,26 +336,17 @@ def handle_action():
 
     try:
         current_player_turn = local_env.player_turn
-        action_description = ""
         action_to_execute = -1
         is_ai_turn_request = (action_type == 'ai_turn')
 
-        print(f"Game [{game_id}] Current player turn index: {current_player_turn}")
-        # print(f"Game [{game_id}] Last player turn index: {local_env.last_player}")
-
-        # --- Process Action based on Type ---
-        # (AI turn logic remains the same)
         if is_ai_turn_request:
             if current_player_turn == 0:
                 print(f"Error: Game [{game_id}] Received AI turn request, but it's human's turn.")
                 return jsonify({"error": "Mismatch: Expected AI turn, but game state indicates human turn."}), 400
 
             ai_player_name = player_names[current_player_turn]
-            print(f"\n--- Game [{game_id}] Processing AI Turn ({ai_player_name}) ---")
             if not local_env.players_in_round[current_player_turn]:
-                 print(f"Game [{game_id}] AI {ai_player_name} is not in round, skipping turn logic.")
                  local_env._update_player_turn() # Advance turn
-                 print(f"Game [{game_id}] Skipped. Next player index is now {local_env.player_turn}")
                  final_state_ui = get_game_state_for_ui(local_env, player_names, message=f"{ai_player_name} passed (not in round).")
                  return jsonify(final_state_ui)
 
@@ -354,16 +355,11 @@ def handle_action():
             state = local_env.get_state(action_space)
 
             if state is None or action_space is None:
-                 print(f"Warning: Game [{game_id}] State or action space is None during AI turn {current_player_turn}.")
                  return jsonify({"error": f"Internal state error for AI {current_player_turn}"}), 500
 
             action_to_execute, _ = agent.decide_move(state, action_space)
-            action_description = f"AI {ai_player_name} chose action {action_to_execute}"
-            # env_utils.decode_action(action_to_execute) # Log the decoded action
 
-        # (Human turn logic remains the same, but uses player_names[0] for messages)
         elif action_type == 'play' or action_type == 'pass':
-            human_player_name = player_names[0]
             if current_player_turn != 0:
                 ai_player_name = player_names[current_player_turn]
                 print(f"Error: Game [{game_id}] Received human action '{action_type}', but it's {ai_player_name}'s turn.")
@@ -373,20 +369,14 @@ def handle_action():
                 cards_played_ui = data.get('cards', [])
                 if not cards_played_ui:
                      return jsonify({"error": "No cards provided for play action"}), 400
-                action_description = f"{human_player_name} played {len(cards_played_ui)}x {cards_played_ui[0]['cardFace']}"
-                print(f"Game [{game_id}] Attempting to process play action: {action_description}")
                 action_to_execute = find_action_index(local_env, cards_played_ui)
                 if action_to_execute == -1:
-                    print(f"Game [{game_id}] Invalid play action determined.")
                     current_state_ui = get_game_state_for_ui(local_env, player_names, message="Invalid move. Try again.")
                     return jsonify(current_state_ui)
 
             elif action_type == 'pass':
-                action_description = f"{human_player_name} passed"
-                print(f"Game [{game_id}] Attempting to process pass action.")
                 action_to_execute = get_pass_action_index(local_env)
                 if action_to_execute == -1:
-                     print(f"Game [{game_id}] Invalid pass action determined (not available?).")
                      current_state_ui = get_game_state_for_ui(local_env, player_names, message="Cannot pass right now.")
                      return jsonify(current_state_ui)
         else:
@@ -394,21 +384,17 @@ def handle_action():
 
         # --- Step Environment ---
         if action_to_execute != -1:
-            print(f"Game [{game_id}] Executing action index: {action_to_execute} ({action_description})")
             action_space = local_env.get_action_space()
             state = local_env.get_state(action_space)
 
             if state is None or action_space is None:
-                 print(f"Error: Game [{game_id}] State or action space is None before step for player {current_player_turn}.")
+                 # print(f"Error: Game [{game_id}] State or action space is None before step for player {current_player_turn}.")
                  return jsonify({"error": "Internal state error before step"}), 500
 
-            _, _, player_done, _ = local_env.step(action_to_execute, state)
-
-            # print(f"  Game [{game_id}] After step - Next player index: {local_env.player_turn}")
-            # print(f"  Game [{game_id}] After step - Last player index: {local_env.last_player}")
+            local_env.step(action_to_execute, state)
 
         else:
-             print(f"Warning: Game [{game_id}] Reached end of action handler with action_to_execute == -1")
+            print(f"Warning: Game [{game_id}] Reached end of action handler with action_to_execute == -1")
 
         # --- Prepare and send updated state (using player_names) ---
         final_state_ui = get_game_state_for_ui(local_env, player_names)
@@ -416,10 +402,8 @@ def handle_action():
         # --- Check for Round/Game End and Update Stats ---
         game_phase = final_state_ui.get("gamePhase")
         if game_phase == 'roundOver' or game_phase == 'gameOver':
-            print(f"--- Game [{game_id}] {game_phase.upper()} ---")
             if db_manager:
                 try:
-                    # Update stats for all players in this game
                     winner_name = None
                     ranked_players = sorted(final_state_ui.get("players", []), key=lambda p: p.get('finishedRank') or 999)
 
@@ -427,16 +411,12 @@ def handle_action():
                         p_name = player_info['name'] # Already normalized for human
                         p_rank = player_info.get('finishedRank')
 
-                        # Increment plays for everyone who participated
                         db_manager.update_one(
                             'players',
                             {'name': p_name},
                             {'$inc': {'plays': 1}},
-                            upsert=True # Ensure AI players get added if somehow missed
+                            upsert=True 
                         )
-                        print(f"  Incremented plays for {p_name}")
-
-                        # Increment wins for the winner (rank 1)
                         if p_rank == 1:
                             winner_name = p_name
                             db_manager.update_one(
@@ -444,20 +424,17 @@ def handle_action():
                                 {'name': winner_name},
                                 {'$inc': {'wins': 1}}
                             )
-                            print(f"  Incremented wins for winner: {winner_name}")
+                            # print(f"  Incremented wins for winner: {winner_name}")
 
                 except Exception as db_error:
                     print(f"Warning: DB error updating stats for game {game_id}: {db_error}")
             else:
-                print("  DB Manager not available, skipping stats update.")
+                pass
 
             # --- Cleanup finished game ---
             with game_lock:
                  if game_id in active_games:
                      del active_games[game_id]
-                     print(f"Game [{game_id}] finished and removed. Total active: {len(active_games)}")
-                 else:
-                     print(f"Warning: Game [{game_id}] was already removed before cleanup check.")
 
         print(f"--- Game [{game_id}] Sending updated state to UI (Player index {final_state_ui.get('currentPlayerIndex')}'s turn) ---")
         return jsonify(final_state_ui)
@@ -469,13 +446,13 @@ def handle_action():
         with game_lock:
             if game_id in active_games:
                 del active_games[game_id]
-                print(f"Game [{game_id}] removed due to error. Total active: {len(active_games)}")
+                # print(f"Game [{game_id}] removed due to error. Total active: {len(active_games)}")
         return jsonify({"error": f"Internal server error: {e}"}), 500
 
 # --- NEW: Leaderboard Endpoint ---
 @app.route('/leaderboard', methods=['GET'])
 def get_leaderboard():
-    print("\n--- Received request to /leaderboard ---")
+    #   print("\n--- Received request to /leaderboard ---")
     if not db_manager:
         return jsonify({"error": "Database connection not available"}), 503 # Service Unavailable
 
@@ -490,13 +467,97 @@ def get_leaderboard():
             sort=[('wins', pymongo.DESCENDING)],  # Sort by wins descending
             limit=10  # Limit to top 20 players
         )
-        print(f"Fetched {len(leaderboard_data)} players for leaderboard.")
+        # print(f"Fetched {len(leaderboard_data)} players for leaderboard.")
         return jsonify(leaderboard_data)
 
     except Exception as e:
         print(f"Error fetching leaderboard: {e}")
         return jsonify({"error": f"Internal server error fetching leaderboard: {e}"}), 500
 
+# --- NEW: Model Opinion Endpoint ---
+@app.route('/game/model-opinion', methods=['POST'])
+def get_model_opinion_api():
+    """API endpoint to get the AI model's opinion about the current game state."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request body"}), 400
+
+    game_id = data.get('gameId')
+    if not game_id:
+        return jsonify({"error": "Missing gameId"}), 400
+
+    # Retrieve the specific game instance
+    game_data = None
+    with game_lock:
+        game_data = active_games.get(game_id)
+
+    if not game_data:
+        return jsonify({"error": "Game not found or already finished"}), 404
+
+    local_env: ScumEnv = game_data['env']
+    local_pool: AgentPool = game_data['pool']
+
+    try:
+        # Get model opinion
+        opinion_data = get_model_opinion(local_env, local_pool)
+        return jsonify(opinion_data)
+    except Exception as e:
+        print(f"Error getting model opinion for game {game_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Internal server error: {e}"}), 500
+
+def get_model_opinion(local_env: ScumEnv, local_pool: AgentPool) -> dict:
+    """Gets the AI model's opinion about the current game state and returns it as a dictionary."""
+    agent = local_pool.get_agent(1)  # Use agent 1 for consistency
+    action_space = local_env.get_action_space()
+    state = local_env.get_state(action_space)
+    
+    if state is None or action_space is None:
+        return {"error": "Cannot analyze current game state"}
+    
+    compact_state = data_utils.compact_form_of_states(state)
+    compact_state = compact_state.to(device=C.DEVICE)
+    value_prediction, probs_prediction = agent.predict_value_and_probs(compact_state)
+
+    action_space = action_space.unsqueeze(0)
+    masked_predictions = data_utils.mask_impossible_actions(action_space, probs_prediction)
+    masked_predictions_prob = F.softmax(masked_predictions, dim=-1)
+
+    prediction_masked = Categorical(masked_predictions_prob)
+    action = prediction_masked.sample()
+    
+    # Extract the scalar value from the action tensor and convert to Python int
+    action_item = int(action.item())
+    probability = float(prediction_masked.probs[0, action_item].item())
+    
+    # Get decoded action information
+    decoded_action = env_utils.decode_action_for_api(action_item + 1)  # +1 because env expects 1-based
+    print("Decoded action: ", decoded_action)
+    
+    # Convert value prediction to scalar
+    value_pred_scalar = float(value_prediction.item() if hasattr(value_prediction, 'item') else value_prediction)
+    
+    # Get top 3 actions with probabilities
+    top_actions = []
+    probs = masked_predictions_prob[0].cpu().detach().numpy()
+    top_indices = probs.argsort()[-3:][::-1]  # Get indices of top 3 values
+    
+    for idx in top_indices:
+        if probs[idx] > 0.001:  # Only include actions with non-negligible probability
+            # Convert numpy types to Python native types
+            top_actions.append({
+                "action": env_utils.decode_action_for_api(int(idx) + 1),
+                "probability": float(probs[idx])
+            })
+    
+    return {
+        "recommendedAction": decoded_action,
+        "probability": probability,
+        "expectedValue": value_pred_scalar,
+        "topActions": top_actions,
+        "confidence": "high" if probability > 0.7 else "medium" if probability > 0.4 else "low"
+    }
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", debug=True, port=5000, threaded=True)
