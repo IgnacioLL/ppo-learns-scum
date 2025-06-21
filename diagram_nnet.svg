@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1600" height="3000" viewBox="0 0 1600 3000" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" font-size="12px">
+    <style>
+      .linear-layer { fill: #e6f3ff; stroke: #0066cc; stroke-width: 1.5; rx: 4; }
+      .norm-layer { fill: #fff2e6; stroke: #ff8c00; stroke-width: 1.5; rx: 4; }
+      .activation-layer { fill: #e6ffe6; stroke: #00cc00; stroke-width: 1.5; rx: 4; }
+      .dropout-layer { fill: #ffe6e6; stroke: #cc0000; stroke-width: 1.5; rx: 4; }
+      .embedding-layer { fill: #f0e6ff; stroke: #8000ff; stroke-width: 1.5; rx: 4; }
+      .concat-layer { fill: #ffffcc; stroke: #cccc00; stroke-width: 1.5; rx: 4; }
+      .softmax-layer { fill: #ffe6f0; stroke: #ff0080; stroke-width: 1.5; rx: 4; }
+      .tensor { fill: #f5f5f5; stroke: #666; stroke-width: 1; rx: 3; }
+      .output { fill: #d4fcd4; stroke: #2e8b57; stroke-width: 2; rx: 4; }
+      .text-label { font-size: 11px; font-weight: bold; fill: #333; text-anchor: middle; }
+      .text-dim { font-size: 10px; fill: #555; font-style: italic; text-anchor: middle; }
+      .text-title { font-size: 18px; font-weight: bold; text-anchor: middle; }
+      .text-subtitle { font-size: 14px; font-weight: bold; text-anchor: middle; }
+      .arrow { stroke: #555; stroke-width: 1.5; marker-end: url(#arrowhead); }
+      .container { fill: none; stroke: #999; stroke-width: 2; stroke-dasharray: 8,4; rx: 10; }
+      .constants-text { font-size: 9px; fill: #444; font-family: monospace; }
+
+    </style>
+  
+    <defs>
+      <marker id="arrowhead" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 1 1 L 5 3 L 1 5" stroke="#555" stroke-width="1" fill="none" />
+      </marker>
+    </defs>
+  
+    <!-- Main Title -->
+    <text x="800" y="30" class="text-title">SCUM Neural Network - Detailed Layer Architecture</text>
+  
+    <!-- Constants -->
+    <g id="constants" transform="translate(1100, 50)">
+      <rect x="0" y="0" width="480" height="180" class="container"/>
+      <text x="240" y="20" class="text-subtitle">Constants</text>
+      <text x="10" y="40" class="constants-text">DIM_INPUT = Cards + Pass + Actions + Thrown + Players + LastAction</text>
+      <text x="10" y="55" class="constants-text">HELPER_DIM_INPUT = DIM_INPUT - 1 + 16</text>
+      <text x="10" y="70" class="constants-text">FINAL_DIM_INPUT = DIM_INPUT - 1 + 16 + 32</text>
+      <text x="10" y="85" class="constants-text">EMBEDDING_SIZE_OUTPUT = 16</text>
+      <text x="10" y="100" class="constants-text">LATENT_SPACE_NEXT_ACTION = 32</text>
+      <text x="10" y="115" class="constants-text">N_STATES = C.NUMBER_OF_POSSIBLE_STATES</text>
+      <text x="10" y="130" class="constants-text">Neurons: small=64, medium=128, big=256, large=1024</text>
+      <text x="10" y="145" class="constants-text">Hu Init: std = sqrt(2.0 / fan_in), Normal Distribution</text>
+    </g>
+
+    <!-- Input Processing -->
+    <g id="input-section">
+      <rect x="700" y="80" width="200" height="40" class="tensor"/>
+      <text x="800" y="105" class="text-label">Input Tensor x [DIM_INPUT]</text>
+      
+      <path class="arrow" d="M 800 120 V 150"/>
+      <rect x="700" y="150" width="200" height="30" class="concat-layer"/>
+      <text x="800" y="170" class="text-label">Split Input</text>
+      
+      <!-- State Branch -->
+      <path class="arrow" d="M 750 180 L 600 220"/>
+      <rect x="500" y="220" width="200" height="40" class="tensor"/>
+      <text x="600" y="245" class="text-label">state [DIM_INPUT-1]</text>
+      
+      <!-- Last Action Branch -->
+      <path class="arrow" d="M 850 180 L 1000 220"/>
+      <rect x="900" y="220" width="200" height="40" class="tensor"/>
+      <text x="1000" y="245" class="text-label">last_action [1] + 1 offset</text>
+      
+      <!-- Embedding for Last Action -->
+      <path class="arrow" d="M 1000 260 V 290"/>
+      <rect x="900" y="290" width="200" height="30" class="embedding-layer"/>
+      <text x="1000" y="310" class="text-label">Embedding(N_STATES+2, 16)</text>
+      
+      <path class="arrow" d="M 1000 320 V 350"/>
+      <rect x="900" y="350" width="200" height="30" class="norm-layer"/>
+      <text x="1000" y="370" class="text-label">LayerNorm(16)</text>
+      
+      <path class="arrow" d="M 1000 380 V 410"/>
+      <rect x="900" y="410" width="200" height="40" class="tensor"/>
+      <text x="1000" y="435" class="text-label">embedded_last_action [16]</text>
+    </g>
+
+    <!-- HelperNNet Section -->
+    <g id="helper-section">
+      <rect x="50" y="500" width="1500" height="800" class="container"/>
+      <text x="800" y="530" class="text-subtitle">HelperNNet Architecture</text>
+      
+      <!-- Concatenation for Helper Input -->
+      <path class="arrow" d="M 600 260 L 400 580"/>
+      <path class="arrow" d="M 1000 450 L 400 580"/>
+      <rect x="300" y="580" width="200" height="40" class="tensor"/>
+      <text x="400" y="605" class="text-label">Helper Input [HELPER_DIM_INPUT]</text>
+      
+      <!-- Helper Network Layers -->
+      <path class="arrow" d="M 400 620 V 650"/>
+      
+      <!-- Layer 1 -->
+      <rect x="300" y="650" width="200" height="25" class="linear-layer"/>
+      <text x="400" y="667" class="text-label">Linear(HELPER_DIM, 128)</text>
+      <path class="arrow" d="M 400 675 V 685"/>
+      <rect x="300" y="685" width="200" height="25" class="norm-layer"/>
+      <text x="400" y="702" class="text-label">LayerNorm(128)</text>
+      <path class="arrow" d="M 400 710 V 720"/>
+      <rect x="300" y="720" width="200" height="25" class="activation-layer"/>
+      <text x="400" y="737" class="text-label">ReLU()</text>
+      
+      <!-- Layer 2 -->
+      <path class="arrow" d="M 400 745 V 765"/>
+      <rect x="300" y="765" width="200" height="25" class="linear-layer"/>
+      <text x="400" y="782" class="text-label">Linear(128, 256)</text>
+      <path class="arrow" d="M 400 790 V 800"/>
+      <rect x="300" y="800" width="200" height="25" class="norm-layer"/>
+      <text x="400" y="817" class="text-label">LayerNorm(256)</text>
+      <path class="arrow" d="M 400 825 V 835"/>
+      <rect x="300" y="835" width="200" height="25" class="activation-layer"/>
+      <text x="400" y="852" class="text-label">ReLU()</text>
+      
+      <!-- Layer 3 -->
+      <path class="arrow" d="M 400 860 V 880"/>
+      <rect x="300" y="880" width="200" height="25" class="linear-layer"/>
+      <text x="400" y="897" class="text-label">Linear(256, 128)</text>
+      <path class="arrow" d="M 400 905 V 915"/>
+      <rect x="300" y="915" width="200" height="25" class="norm-layer"/>
+      <text x="400" y="932" class="text-label">LayerNorm(128)</text>
+      <path class="arrow" d="M 400 940 V 950"/>
+      <rect x="300" y="950" width="200" height="25" class="activation-layer"/>
+      <text x="400" y="967" class="text-label">ReLU()</text>
+      
+      <!-- Layer 4 -->
+      <path class="arrow" d="M 400 975 V 995"/>
+      <rect x="300" y="995" width="200" height="25" class="linear-layer"/>
+      <text x="400" y="1012" class="text-label">Linear(128, 32)</text>
+      
+      <path class="arrow" d="M 400 1020 V 1050"/>
+      <rect x="300" y="1050" width="200" height="40" class="output"/>
+      <text x="400" y="1075" class="text-label">latent_space [32]</text>
+      
+      <!-- Player Heads -->
+      <path class="arrow" d="M 400 1090 L 700 1120"/>
+      <path class="arrow" d="M 400 1090 L 900 1120"/>
+      <path class="arrow" d="M 400 1090 L 1100 1120"/>
+      <path class="arrow" d="M 400 1090 L 1300 1120"/>
+      
+      <!-- Player 1 Head -->
+      <g transform="translate(600, 1120)">
+        <rect x="0" y="0" width="200" height="25" class="activation-layer"/>
+        <text x="100" y="17" class="text-label">ReLU()</text>
+        <path class="arrow" d="M 100 25 V 35"/>
+        <rect x="0" y="35" width="200" height="25" class="linear-layer"/>
+        <text x="100" y="52" class="text-label">Linear(32, N_STATES+1)</text>
+        <path class="arrow" d="M 100 60 V 70"/>
+        <rect x="0" y="70" width="200" height="25" class="softmax-layer"/>
+        <text x="100" y="87" class="text-label">Softmax()</text>
+        <path class="arrow" d="M 100 95 V 105"/>
+        <rect x="0" y="105" width="200" height="30" class="output"/>
+        <text x="100" y="125" class="text-label">Player 1 Probs</text>
+      </g>
+      
+      <!-- Player 2 Head -->
+      <g transform="translate(800, 1120)">
+        <rect x="0" y="0" width="200" height="25" class="activation-layer"/>
+        <text x="100" y="17" class="text-label">ReLU()</text>
+        <path class="arrow" d="M 100 25 V 35"/>
+        <rect x="0" y="35" width="200" height="25" class="linear-layer"/>
+        <text x="100" y="52" class="text-label">Linear(32, N_STATES+1)</text>
+        <path class="arrow" d="M 100 60 V 70"/>
+        <rect x="0" y="70" width="200" height="25" class="softmax-layer"/>
+        <text x="100" y="87" class="text-label">Softmax()</text>
+        <path class="arrow" d="M 100 95 V 105"/>
+        <rect x="0" y="105" width="200" height="30" class="output"/>
+        <text x="100" y="125" class="text-label">Player 2 Probs</text>
+      </g>
+      
+      <!-- Player 3 Head -->
+      <g transform="translate(1000, 1120)">
+        <rect x="0" y="0" width="200" height="25" class="activation-layer"/>
+        <text x="100" y="17" class="text-label">ReLU()</text>
+        <path class="arrow" d="M 100 25 V 35"/>
+        <rect x="0" y="35" width="200" height="25" class="linear-layer"/>
+        <text x="100" y="52" class="text-label">Linear(32, N_STATES+1)</text>
+        <path class="arrow" d="M 100 60 V 70"/>
+        <rect x="0" y="70" width="200" height="25" class="softmax-layer"/>
+        <text x="100" y="87" class="text-label">Softmax()</text>
+        <path class="arrow" d="M 100 95 V 105"/>
+        <rect x="0" y="105" width="200" height="30" class="output"/>
+        <text x="100" y="125" class="text-label">Player 3 Probs</text>
+      </g>
+      
+      <!-- Player 4 Head -->
+      <g transform="translate(1200, 1120)">
+        <rect x="0" y="0" width="200" height="25" class="activation-layer"/>
+        <text x="100" y="17" class="text-label">ReLU()</text>
+        <path class="arrow" d="M 100 25 V 35"/>
+        <rect x="0" y="35" width="200" height="25" class="linear-layer"/>
+        <text x="100" y="52" class="text-label">Linear(32, N_STATES+1)</text>
+        <path class="arrow" d="M 100 60 V 70"/>
+        <rect x="0" y="70" width="200" height="25" class="softmax-layer"/>
+        <text x="100" y="87" class="text-label">Softmax()</text>
+        <path class="arrow" d="M 100 95 V 105"/>
+        <rect x="0" y="105" width="200" height="30" class="output"/>
+        <text x="100" y="125" class="text-label">Player 4 Probs</text>
+      </g>
+    </g>
+
+    <!-- NNet Section -->
+    <g id="nnet-section">
+      <rect x="50" y="1350" width="1500" height="1000" class="container"/>
+      <text x="800" y="1380" class="text-subtitle">NNet (Actor-Critic) Architecture</text>
+      
+      <!-- Final Concatenation -->
+      <path class="arrow" d="M 600 260 L 800 1420" stroke="black" stroke-dasharray="5,5" fill="none"></path>
+      <path class="arrow" d="M 1000 450 L 800 1420" stroke="black" stroke-dasharray="5,5" fill="none"></path>
+      <path class="arrow" d="M 400 1090 L 800 1420" stroke="black" stroke-dasharray="5,5" fill="none"></path>
+      <rect x="700" y="1420" width="200" height="40" class="concat-layer"/>
+      <text x="800" y="1445" class="text-label">Final Input [FINAL_DIM_INPUT]</text>
+      
+      
+      <!-- Shared Body Architecture (Medium Example) -->
+      <g id="shared-arch" transform="translate(100, 1500)">
+        <rect x="0" y="0" width="600" height="800" class="container"/>
+        <text x="300" y="25" class="text-subtitle">Shared Body Architecture</text>
+        
+        <!-- Chore Part -->
+        <rect x="200" y="50" width="200" height="30" fill="white"/>
+        <text x="300" y="70" class="text-label">Chore Part (Shared)</text>
+        
+        <path class="arrow" d="M 300 80 V 100"/>
+        <rect x="200" y="100" width="200" height="25" class="linear-layer"/>
+        <text x="300" y="117" class="text-label">Linear(FINAL_DIM_INPUT, N)</text>
+        <path class="arrow" d="M 300 125 V 135"/>
+        <rect x="200" y="135" width="200" height="25" class="norm-layer"/>
+        <text x="300" y="152" class="text-label">LayerNorm(N)</text>
+        <path class="arrow" d="M 300 160 V 170"/>
+        <rect x="200" y="170" width="200" height="25" class="activation-layer"/>
+        <text x="300" y="187" class="text-label">ReLU()</text>
+        <path class="arrow" d="M 300 195 V 205"/>
+        <rect x="200" y="205" width="200" height="25" class="dropout-layer"/>
+        <text x="300" y="222" class="text-label">Dropout(0.2)</text>
+        <path class="arrow" d="M 300 230 V 250"/>
+        <rect x="200" y="250" width="200" height="25" class="linear-layer"/>
+        <text x="300" y="267" class="text-label">Linear(N, 2*N)</text>
+        <path class="arrow" d="M 300 275 V 285"/>
+        <rect x="200" y="285" width="200" height="25" class="norm-layer"/>
+        <text x="300" y="302" class="text-label">LayerNorm(2*N)</text>
+        <path class="arrow" d="M 300 310 V 320"/>
+        <rect x="200" y="320" width="200" height="25" class="activation-layer"/>
+        <text x="300" y="337" class="text-label">ReLU()</text>
+        
+        <path class="arrow" d="M 300 345 V 365"/>
+        <rect x="200" y="365" width="200" height="40" class="tensor"/>
+        <text x="300" y="390" class="text-label">Shared Features [2*N]</text>
+        
+        <!-- Split to Value and Policy -->
+        <path class="arrow" d="M 250 405 L 150 440"/>
+        <path class="arrow" d="M 350 405 L 450 440"/>
+        
+        <!-- Value Head -->
+        <g transform="translate(50, 440)">
+          <rect x="0" y="0" width="200" height="25" class="linear-layer"/>
+          <text x="100" y="17" class="text-label">Linear(2*N, N)</text>
+          <path class="arrow" d="M 100 25 V 35"/>
+          <rect x="0" y="35" width="200" height="25" class="norm-layer"/>
+          <text x="100" y="52" class="text-label">LayerNorm(N)</text>
+          <path class="arrow" d="M 100 60 V 70"/>
+          <rect x="0" y="70" width="200" height="25" class="activation-layer"/>
+          <text x="100" y="87" class="text-label">ReLU()</text>
+          <path class="arrow" d="M 100 95 V 105"/>
+          <rect x="0" y="105" width="200" height="25" class="linear-layer"/>
+          <text x="100" y="122" class="text-label">Linear(N, 1)</text>
+          <path class="arrow" d="M 100 130 V 150"/>
+          <rect x="0" y="150" width="200" height="40" class="output"/>
+          <text x="100" y="175" class="text-label">Value Estimate</text>
+        </g>
+        
+        <!-- Policy Head -->
+        <g transform="translate(350, 440)">
+          <rect x="0" y="0" width="200" height="25" class="linear-layer"/>
+          <text x="100" y="17" class="text-label">Linear(2*N, N)</text>
+          <path class="arrow" d="M 100 25 V 35"/>
+          <rect x="0" y="35" width="200" height="25" class="norm-layer"/>
+          <text x="100" y="52" class="text-label">LayerNorm(N)</text>
+          <path class="arrow" d="M 100 60 V 70"/>
+          <rect x="0" y="70" width="200" height="25" class="activation-layer"/>
+          <text x="100" y="87" class="text-label">ReLU()</text>
+          <path class="arrow" d="M 100 95 V 105"/>
+          <rect x="0" y="105" width="200" height="25" class="linear-layer"/>
+          <text x="100" y="122" class="text-label">Linear(N, N_STATES)</text>
+          <path class="arrow" d="M 100 130 V 150"/>
+          <rect x="0" y="150" width="200" height="40" class="output"/>
+          <text x="100" y="175" class="text-label">Policy Logits</text>
+        </g>
+      </g>
+      
+      <!-- Separate Architecture -->
+      <g id="separate-arch" transform="translate(800, 1500)">
+        <rect x="0" y="0" width="700" height="800" class="container"/>
+        <text x="350" y="25" class="text-subtitle">Separate Architecture</text>
+        
+        <!-- Value Network -->
+        <g transform="translate(50, 50)">
+          <rect x="0" y="0" width="250" height="30" fill="white"/>
+          <text x="125" y="20" class="text-label">Value Network</text>
+          
+          <path class="arrow" d="M 125 30 V 50"/>
+          <rect x="25" y="50" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="67" class="text-label">Linear(FINAL_DIM_INPUT, N)</text>
+          <path class="arrow" d="M 125 75 V 85"/>
+          <rect x="25" y="85" width="200" height="25" class="norm-layer"/>
+          <text x="125" y="102" class="text-label">LayerNorm(N)</text>
+          <path class="arrow" d="M 125 110 V 120"/>
+          <rect x="25" y="120" width="200" height="25" class="activation-layer"/>
+          <text x="125" y="137" class="text-label">LeakyReLU()</text>
+          <path class="arrow" d="M 125 145 V 155"/>
+          <rect x="25" y="155" width="200" height="25" class="dropout-layer"/>
+          <text x="125" y="172" class="text-label">Dropout(0.2)</text>
+          
+          <path class="arrow" d="M 125 180 V 200"/>
+          <rect x="25" y="200" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="217" class="text-label">Linear(N, 2*N)</text>
+          <path class="arrow" d="M 125 225 V 235"/>
+          <rect x="25" y="235" width="200" height="25" class="norm-layer"/>
+          <text x="125" y="252" class="text-label">LayerNorm(2*N)</text>
+          <path class="arrow" d="M 125 260 V 270"/>
+          <rect x="25" y="270" width="200" height="25" class="activation-layer"/>
+          <text x="125" y="287" class="text-label">LeakyReLU()</text>
+          <path class="arrow" d="M 125 295 V 305"/>
+          <rect x="25" y="305" width="200" height="25" class="dropout-layer"/>
+          <text x="125" y="322" class="text-label">Dropout(0.2)</text>
+          
+          <path class="arrow" d="M 125 330 V 350"/>
+          <rect x="25" y="350" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="367" class="text-label">Linear(2*N, N)</text>
+          <path class="arrow" d="M 125 375 V 385"/>
+          <rect x="25" y="385" width="200" height="25" class="norm-layer"/>
+          <text x="125" y="402" class="text-label">LayerNorm(N)</text>
+          <path class="arrow" d="M 125 410 V 420"/>
+          <rect x="25" y="420" width="200" height="25" class="activation-layer"/>
+          <text x="125" y="437" class="text-label">LeakyReLU()</text>
+          <path class="arrow" d="M 125 445 V 455"/>
+          <rect x="25" y="455" width="200" height="25" class="dropout-layer"/>
+          <text x="125" y="472" class="text-label">Dropout(0.2)</text>
+          
+          <path class="arrow" d="M 125 480 V 500"/>
+          <rect x="25" y="500" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="517" class="text-label">Linear(N, N//4)</text>
+          <path class="arrow" d="M 125 525 V 535"/>
+          <rect x="25" y="535" width="200" height="25" class="activation-layer"/>
+          <text x="125" y="552" class="text-label">LeakyReLU()</text>
+          <path class="arrow" d="M 125 560 V 580"/>
+          <rect x="25" y="580" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="597" class="text-label">Linear(N//4, 1)</text>
+          
+          <path class="arrow" d="M 125 605 V 625"/>
+          <rect x="25" y="625" width="200" height="40" class="output"/>
+          <text x="125" y="650" class="text-label">Value Estimate</text>
+        </g>
+        
+        <!-- Policy Network -->
+        <g transform="translate(400, 50)">
+          <rect x="0" y="0" width="250" height="30" fill="white"/>
+          <text x="125" y="20" class="text-label">Policy Network</text>
+          
+          <path class="arrow" d="M 125 30 V 50"/>
+          <rect x="25" y="50" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="67" class="text-label">Linear(FINAL_DIM_INPUT, N)</text>
+          <path class="arrow" d="M 125 75 V 85"/>
+          <rect x="25" y="85" width="200" height="25" class="norm-layer"/>
+          <text x="125" y="102" class="text-label">LayerNorm(N)</text>
+          <path class="arrow" d="M 125 110 V 120"/>
+          <rect x="25" y="120" width="200" height="25" class="activation-layer"/>
+          <text x="125" y="137" class="text-label">LeakyReLU()</text>
+          <path class="arrow" d="M 125 145 V 155"/>
+          <rect x="25" y="155" width="200" height="25" class="dropout-layer"/>
+          <text x="125" y="172" class="text-label">Dropout(0.2)</text>
+          
+          <path class="arrow" d="M 125 180 V 200"/>
+          <rect x="25" y="200" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="217" class="text-label">Linear(N, 2*N)</text>
+          <path class="arrow" d="M 125 225 V 235"/>
+          <rect x="25" y="235" width="200" height="25" class="norm-layer"/>
+          <text x="125" y="252" class="text-label">LayerNorm(2*N)</text>
+          <path class="arrow" d="M 125 260 V 270"/>
+          <rect x="25" y="270" width="200" height="25" class="dropout-layer"/>
+          <text x="125" y="287" class="text-label">Dropout(0.2)</text>
+          <path class="arrow" d="M 125 295 V 305"/>
+          <rect x="25" y="305" width="200" height="25" class="activation-layer"/>
+          <text x="125" y="322" class="text-label">LeakyReLU()</text>
+          
+          <path class="arrow" d="M 125 330 V 350"/>
+          <rect x="25" y="350" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="367" class="text-label">Linear(2*N, N)</text>
+          <path class="arrow" d="M 125 375 V 385"/>
+          <rect x="25" y="385" width="200" height="25" class="norm-layer"/>
+          <text x="125" y="402" class="text-label">LayerNorm(N)</text>
+          <path class="arrow" d="M 125 410 V 420"/>
+          <rect x="25" y="420" width="200" height="25" class="dropout-layer"/>
+          <text x="125" y="437" class="text-label">Dropout(0.2)</text>
+          <path class="arrow" d="M 125 445 V 455"/>
+          <rect x="25" y="455" width="200" height="25" class="activation-layer"/>
+          <text x="125" y="472" class="text-label">LeakyReLU()</text>
+          
+          <path class="arrow" d="M 125 480 V 500"/>
+          <rect x="25" y="500" width="200" height="25" class="linear-layer"/>
+          <text x="125" y="517" class="text-label">Linear(N, N_STATES)</text>
+          
+          <path class="arrow" d="M 125 525 V 545"/>
+          <rect x="25" y="545" width="200" height="40" class="output"/>
+          <text x="125" y="570" class="text-label">Policy Logits</text>
+        </g>
+      </g>
+    </g>
+
+    <!-- Legend -->
+    <g id="legend" transform="translate(50, 50)">
+      <rect x="0" y="0" width="300" height="240" class="container"/>
+      <text x="150" y="20" class="text-subtitle">Layer Type Legend</text>
+      
+      <!-- Column 1 -->
+      <rect x="20" y="35" width="80" height="20" class="linear-layer"/>
+      <text x="60" y="50" class="text-label">Linear</text>
+      
+      <rect x="20" y="60" width="80" height="20" class="norm-layer"/>
+      <text x="60" y="75" class="text-label">LayerNorm</text>
+      
+      <rect x="20" y="85" width="80" height="20" class="activation-layer"/>
+      <text x="60" y="100" class="text-label">Activation</text>
+      
+      <rect x="20" y="110" width="80" height="20" class="dropout-layer"/>
+      <text x="60" y="125" class="text-label">Dropout</text>
+      
+      <rect x="20" y="135" width="80" height="20" class="embedding-layer"/>
+      <text x="60" y="150" class="text-label">Embedding</text>
+      
+      <!-- Column 2 -->
+      <rect x="160" y="35" width="80" height="20" class="concat-layer"/>
+      <text x="200" y="50" class="text-label">Concat/Split</text>
+      
+      <rect x="160" y="60" width="80" height="20" class="softmax-layer"/>
+      <text x="200" y="75" class="text-label">Softmax</text>
+      
+      <rect x="160" y="85" width="80" height="20" class="tensor"/>
+      <text x="200" y="100" class="text-label">Tensor</text>
+      
+      <rect x="160" y="110" width="80" height="20" class="output"/>
+      <text x="200" y="125" class="text-label">Output</text>
+    </g>
+  
+</svg>
